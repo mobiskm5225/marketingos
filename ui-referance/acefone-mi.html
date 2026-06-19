@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Acefone MI · Intelligence Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sidebar:#1a2332;
+    --sidebar-hover:#22304a;
+    --accent:#81bc00;
+    --accent-tint:rgba(129,188,0,.12);
+    --accent-tint-strong:rgba(129,188,0,.18);
+    --nav-text:#9aa5b4;
+    --page-bg:#f0f2f5;
+    --surface:#ffffff;
+    --border:#e2e6ea;
+    --text:#1a2332;
+    --muted:#9aa5b4;
+    --table-head:#fafbfc;
+    --blue:#2563eb; --blue-bg:#e0ecff;
+    --amber:#b45309; --amber-bg:#fef3c7;
+    --red:#b91c1c; --red-bg:#fee2e2;
+    --green:#3f7a00; --green-bg:#e6f4cc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--text);background:var(--page-bg);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+
+  /* Layout */
+  .app{display:flex;min-height:100vh}
+  .sidebar{width:240px;background:var(--sidebar);color:#fff;position:fixed;top:0;left:0;bottom:0;display:flex;flex-direction:column;z-index:10}
+  .sidebar .logo{padding:20px 20px 16px;display:flex;gap:12px;align-items:center;border-bottom:1px solid rgba(255,255,255,.06)}
+  .logo-icon{width:36px;height:36px;border-radius:10px;background:var(--accent-tint);display:grid;place-items:center;color:var(--accent)}
+  .logo-text{font-weight:700;font-size:15px;line-height:1.1}
+  .logo-text small{display:block;font-weight:400;font-size:11px;color:var(--nav-text);margin-top:3px}
+  .nav-section{padding:18px 12px 4px}
+  .nav-label{font-size:10px;letter-spacing:.12em;color:var(--nav-text);text-transform:uppercase;padding:0 10px 8px;font-weight:600}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--nav-text);font-size:13.5px;font-weight:500;border-left:3px solid transparent;margin-bottom:2px;cursor:pointer;transition:background .12s,color .12s}
+  .nav-item:hover{background:var(--sidebar-hover);color:#fff}
+  .nav-item.active{background:var(--accent-tint);color:var(--accent);border-left-color:var(--accent);padding-left:9px}
+  .nav-item svg{width:16px;height:16px;flex-shrink:0}
+  .sidebar-footer{margin-top:auto;padding:14px 22px;color:var(--nav-text);font-size:11px;border-top:1px solid rgba(255,255,255,.06)}
+
+  .main{margin-left:240px;flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:56px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 32px;font-size:13.5px;color:#54616f;font-weight:500;position:sticky;top:0;z-index:5}
+  .content{padding:32px;flex:1}
+
+  /* Headings */
+  .page-title{font-size:22px;font-weight:700;margin:0 0 4px}
+  .page-sub{font-size:13.5px;color:var(--muted);margin:0 0 24px}
+
+  /* Cards */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px}
+  .card-pad{padding:20px}
+
+  /* Stat cards */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+  .stat{padding:18px;display:flex;flex-direction:column;gap:10px}
+  .stat .top{display:flex;justify-content:space-between;align-items:flex-start}
+  .stat .label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .stat .value{font-size:26px;font-weight:700;line-height:1.1}
+  .stat .sub{font-size:11.5px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+  .icon-box{width:36px;height:36px;border-radius:9px;background:#f0f2f5;display:grid;place-items:center;color:#6b7785}
+  .icon-box.lime{background:var(--accent-tint);color:var(--accent)}
+  .icon-box svg{width:18px;height:18px}
+
+  /* Agent breakdown */
+  .agent-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+  .agent-card{padding:20px}
+  .agent-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .agent-name{font-size:15px;font-weight:700}
+  .pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:#f0f2f5;color:#54616f;font-size:11px;font-weight:600;letter-spacing:.02em}
+  .agent-metrics{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding-top:14px;border-top:1px solid var(--border)}
+  .metric .m-label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .metric .m-value{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace}
+
+  /* Table */
+  .card-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+  .card-head h3{margin:0;font-size:15px;font-weight:700}
+  .link-accent{color:var(--accent);font-weight:600;font-size:13px}
+  .link-accent:hover{text-decoration:underline}
+  table.tbl{width:100%;border-collapse:collapse}
+  .tbl th{background:var(--table-head);color:var(--muted);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;text-align:left;padding:11px 20px;border-bottom:1px solid var(--border)}
+  .tbl td{padding:14px 20px;border-bottom:1px solid var(--page-bg);font-size:13px;vertical-align:middle}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl tbody tr:hover{background:var(--table-head)}
+  .mono{font-family:'JetBrains Mono',monospace;font-size:12.5px}
+  .title-link{color:var(--accent);font-weight:500}
+  .title-link:hover{text-decoration:underline}
+  .muted{color:var(--muted)}
+
+  /* Status badges */
+  .status{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:600;text-transform:capitalize}
+  .status .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .status.done{background:var(--green-bg);color:var(--green)}
+  .status.processing{background:var(--blue-bg);color:var(--blue)}
+  .status.pending{background:var(--amber-bg);color:var(--amber)}
+  .status.error{background:var(--red-bg);color:var(--red)}
+  .status.lg{font-size:13px;padding:6px 14px}
+
+  /* Inputs */
+  .input,.select,.textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13.5px;font-family:inherit;background:#fff;color:var(--text);outline:none;transition:border-color .12s,box-shadow .12s}
+  .input:focus,.select:focus,.textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-tint)}
+  .textarea{font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;min-height:300px}
+  label.field{display:block;margin-bottom:16px}
+  label.field .lbl{display:block;font-size:12.5px;font-weight:600;margin-bottom:6px;color:var(--text)}
+  label.field .lbl .req{color:#dc2626;margin-left:2px}
+  label.field .hint{font-size:11.5px;color:var(--muted);margin-top:6px}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:13.5px;font-weight:600;transition:background .12s,border-color .12s}
+  .btn:hover{background:var(--table-head)}
+  .btn-primary{background:var(--accent);color:var(--sidebar);border-color:var(--accent)}
+  .btn-primary:hover{background:#72a800;border-color:#72a800}
+  .btn-primary:disabled{background:#d4d8de;border-color:#d4d8de;color:#8a94a3;cursor:not-allowed}
+  .btn-text{background:transparent;border:none;color:var(--muted);padding:6px 10px;font-size:13px;font-weight:500}
+  .btn-text:hover{color:var(--text);background:transparent}
+
+  /* Filter row */
+  .filters{display:flex;gap:10px;align-items:center;margin-bottom:18px}
+  .filters .select{width:auto;min-width:180px}
+
+  /* Pagination */
+  .pagination{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px}
+  .pgn-btns{display:flex;gap:6px}
+  .pgn-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:#fff;display:grid;place-items:center;color:var(--text)}
+  .pgn-btn:hover{background:var(--table-head)}
+
+  /* Tabs */
+  .tabs{display:flex;gap:10px;margin-bottom:18px}
+  .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:10px;border:1px solid var(--border);background:#fff;color:#54616f;font-weight:600;font-size:14px}
+  .tab.active{background:var(--accent);color:var(--sidebar);border-color:var(--accent)}
+  .tab svg{width:16px;height:16px}
+
+  .info-box{background:var(--accent-tint);border:1px solid var(--accent-tint-strong);color:#3f5e00;padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:18px;font-weight:500}
+
+  /* Job detail */
+  .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;margin-bottom:16px;font-weight:500}
+  .back-link:hover{color:var(--text)}
+  .job-head{padding:24px}
+  .job-head .row{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+  .job-title{font-size:20px;font-weight:700;margin:0 0 4px}
+  .job-agent{font-size:13px;color:var(--muted)}
+  .metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:20px 0;border-top:1px solid var(--border);margin-top:20px}
+  .metrics-row .metric .m-value{font-size:18px}
+  .job-foot{display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border)}
+
+  .alert-box{padding:14px 18px;border-radius:10px;margin-bottom:18px;font-size:13.5px;font-weight:500;border:1px solid}
+  .alert-error{background:var(--red-bg);border-color:#fca5a5;color:var(--red)}
+  .alert-running{background:var(--blue-bg);border-color:#93c5fd;color:var(--blue);display:flex;align-items:center;gap:10px}
+  .pulse{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* Markdown content */
+  .md{padding:24px;font-size:14px;line-height:1.65}
+  .md h1,.md h2,.md h3{margin:24px 0 12px;font-weight:700}
+  .md h1{font-size:20px}
+  .md h2{font-size:17px}
+  .md h3{font-size:15px}
+  .md p{margin:10px 0}
+  .md ul{padding-left:22px;margin:10px 0}
+  .md li{margin:5px 0}
+  .md code{font-family:'JetBrains Mono',monospace;background:#f0f2f5;padding:1.5px 6px;border-radius:4px;font-size:12.5px}
+  .md pre{background:var(--sidebar);color:#e8eef5;padding:16px;border-radius:10px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.55}
+  .md pre code{background:transparent;color:inherit;padding:0}
+  .md blockquote{border-left:3px solid var(--accent);padding:6px 14px;color:#3f5e00;background:var(--accent-tint);margin:14px 0;border-radius:0 8px 8px 0}
+  .md table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  .md table th,.md table td{border:1px solid var(--border);padding:8px 12px;text-align:left}
+  .md table th{background:var(--table-head);font-weight:600}
+  .md .callout{padding:12px 16px;border-radius:10px;margin:12px 0;border:1px solid;display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
+  .callout.red{background:var(--red-bg);border-color:#fca5a5;color:var(--red)}
+  .callout.amber{background:var(--amber-bg);border-color:#fcd34d;color:var(--amber)}
+  .callout.blue{background:var(--blue-bg);border-color:#93c5fd;color:var(--blue)}
+  .callout.green{background:var(--green-bg);border-color:#bef264;color:var(--green)}
+  .md .check{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .md .check input{accent-color:var(--accent)}
+
+  .empty{padding:60px 20px;text-align:center;color:var(--muted);font-size:13.5px}
+
+  .word-count{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:6px;font-family:'JetBrains Mono',monospace}
+  .word-count .warn{color:var(--amber)}
+
+  .spinner{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media (max-width:1024px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .agent-grid{grid-template-columns:1fr}
+    .metrics-row{grid-template-columns:repeat(2,1fr)}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">
+        <!-- brain icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/></svg>
+      </div>
+      <div class="logo-text">Acefone MI<small>Intelligence Hub</small></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Main</div>
+      <a class="nav-item" data-route="/" href="#/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Dashboard
+      </a>
+      <a class="nav-item" data-route="/jobs" href="#/jobs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        Jobs
+      </a>
+      <a class="nav-item" data-route="/trigger" href="#/trigger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Trigger Agent
+      </a>
+    </div>
+    <div class="sidebar-footer">v2.0 · Phase 3</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar" id="breadcrumb">Acefone Marketing Intelligence Hub</header>
+    <main class="content" id="view"></main>
+  </div>
+</div>
+
+<script>
+/* ---------- Mock Data ---------- */
+const jobs = [
+  { id:'j-1042', agent:'SEO Analyzer', title:'Cloud telephony pricing — Q4 draft', status:'done', tokensIn:12340, tokensOut:3211, cost:0.0423, source:'webhook', created:'2025-06-19 14:32', url:'/cloud-telephony-pricing' },
+  { id:'j-1041', agent:'Existing Blog Reviewer', title:'How VoIP cuts call center costs', status:'processing', tokensIn:8210, tokensOut:0, cost:0.0184, source:'api', created:'2025-06-19 14:18', url:'https://acefone.com/blog/voip-call-center' },
+  { id:'j-1040', agent:'SEO Analyzer', title:'IVR vs Auto Attendant — guide', status:'pending', tokensIn:0, tokensOut:0, cost:0, source:'ingest', created:'2025-06-19 13:55', url:'/ivr-vs-auto-attendant' },
+  { id:'j-1039', agent:'Existing Blog Reviewer', title:'Best toll free number providers 2025', status:'error', tokensIn:1240, tokensOut:0, cost:0.0021, source:'webhook', created:'2025-06-19 13:21', url:'https://acefone.com/blog/toll-free-providers', error:'Page returned 404 — could not crawl content.' },
+  { id:'j-1038', agent:'SEO Analyzer', title:'Hosted PBX migration checklist', status:'done', tokensIn:9820, tokensOut:2940, cost:0.0341, source:'api', created:'2025-06-19 12:47', url:'/hosted-pbx-migration' },
+  { id:'j-1037', agent:'SEO Analyzer', title:'WhatsApp Business API — what changed', status:'done', tokensIn:14210, tokensOut:4102, cost:0.0512, source:'webhook', created:'2025-06-19 11:30', url:'/whatsapp-business-api-2025' },
+  { id:'j-1036', agent:'Existing Blog Reviewer', title:'CCaaS vs UCaaS in 2025', status:'done', tokensIn:7430, tokensOut:1820, cost:0.0264, source:'ingest', created:'2025-06-19 10:12', url:'https://acefone.com/blog/ccaas-vs-ucaas' },
+];
+
+const stats = {
+  totalJobs: 247,
+  monthCost: 8.42,
+  totalCost: 41.2384,
+  errorRate: 3.2,
+  failed: 8,
+  activeAgents: 2,
+  agents: [
+    { name:'SEO Analyzer', jobs:142, cost:5.84 },
+    { name:'Existing Blog Reviewer', jobs:105, cost:2.58 }
+  ]
+};
+
+/* ---------- Helpers ---------- */
+const $ = (s,r=document)=>r.querySelector(s);
+const el = (html)=>{const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild};
+
+function statusBadge(s,lg=false){
+  return `<span class="status ${s} ${lg?'lg':''}"><span class="dot"></span>${s}</span>`;
+}
+
+function fmtMoney(n){ return '$'+n.toFixed(4); }
+function fmtNum(n){ return n.toLocaleString(); }
+
+/* ---------- Routes ---------- */
+function setBreadcrumb(t){ $('#breadcrumb').textContent = t; }
+function setActiveNav(route){
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.classList.toggle('active', n.dataset.route===route);
+  });
+}
+
+function renderDashboard(){
+  setBreadcrumb('Acefone Marketing Intelligence Hub');
+  setActiveNav('/');
+  const recent = jobs.slice(0,5);
+  $('#view').innerHTML = `
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-sub">Agent runs, cost tracking, and system health</p>
+
+    <div class="stats">
+      <div class="card stat">
+        <div class="top">
+          <div class="label">Total Jobs</div>
+          <div class="icon-box lime"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        </div>
+        <div class="value">${stats.totalJobs}</div>
+      </div>
+      <div class="card stat">
+        <div class="top">
+          <div class="label">This Month</div>
+          <div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        </div>
+        <div class="value">$${stats.monthCost.toFixed(2)}</div>
+        <div class="sub">Total $${stats.totalCost.toFixed(4)}</div>
+      </div>
+      <div class="card stat">
+        <div class="top">
+          <div class="label">Error Rate</div>
+          <div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        </div>
+        <div class="value">${stats.errorRate}%</div>
+        <div class="sub">${stats.failed} failed</div>
+      </div>
+      <div class="card stat">
+        <div class="top">
+          <div class="label">Active Agents</div>
+          <div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+        </div>
+        <div class="value">${stats.activeAgents}</div>
+      </div>
+    </div>
+
+    <div class="agent-grid">
+      ${stats.agents.map(a=>`
+        <div class="card agent-card">
+          <div class="agent-head">
+            <div class="agent-name">${a.name}</div>
+            <span class="pill">agent</span>
+          </div>
+          <div class="agent-metrics">
+            <div class="metric">
+              <div class="m-label">Jobs</div>
+              <div class="m-value">${a.jobs}</div>
+            </div>
+            <div class="metric">
+              <div class="m-label">Cost</div>
+              <div class="m-value">$${a.cost.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>Recent Jobs</h3>
+        <a href="#/jobs" class="link-accent">View all →</a>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Agent</th><th>Title / Page</th><th>Status</th><th>Cost</th><th>Time</th></tr></thead>
+        <tbody>
+          ${recent.map(j=>`
+            <tr>
+              <td>${j.agent}</td>
+              <td><a class="title-link" href="#/jobs/${j.id}">${j.title}</a></td>
+              <td>${statusBadge(j.status)}</td>
+              <td class="mono">${fmtMoney(j.cost)}</td>
+              <td class="muted">${j.created}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+let jobFilters = { agent:'all', status:'all', page:1 };
+
+function renderJobs(){
+  setBreadcrumb('Acefone Marketing Intelligence Hub / Jobs');
+  setActiveNav('/jobs');
+  const filtered = jobs.filter(j=>
+    (jobFilters.agent==='all'||j.agent===jobFilters.agent) &&
+    (jobFilters.status==='all'||j.status===jobFilters.status)
+  );
+  const hasFilter = jobFilters.agent!=='all' || jobFilters.status!=='all';
+  $('#view').innerHTML = `
+    <h1 class="page-title">Jobs</h1>
+    <p class="page-sub">All agent runs — newest first</p>
+
+    <div class="filters">
+      <select class="select" id="f-agent">
+        <option value="all">All Agents</option>
+        <option value="SEO Analyzer">SEO Analyzer</option>
+        <option value="Existing Blog Reviewer">Existing Blog Reviewer</option>
+      </select>
+      <select class="select" id="f-status">
+        <option value="all">All Statuses</option>
+        <option value="done">Done</option>
+        <option value="processing">Processing</option>
+        <option value="pending">Pending</option>
+        <option value="error">Error</option>
+      </select>
+      ${hasFilter?`<button class="btn-text" id="f-clear">Clear</button>`:''}
+    </div>
+
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Agent</th><th>Title / Page</th><th>Status</th><th>Tokens (in / out)</th><th>Cost</th><th>Source</th><th>Created</th></tr></thead>
+        <tbody>
+          ${filtered.length===0?`<tr><td colspan="7"><div class="empty">No jobs found</div></td></tr>`:
+            filtered.map(j=>`
+            <tr>
+              <td>${j.agent}</td>
+              <td><a class="title-link" href="#/jobs/${j.id}">${j.title}</a></td>
+              <td>${statusBadge(j.status)}</td>
+              <td class="mono">${fmtNum(j.tokensIn)} / ${fmtNum(j.tokensOut)}</td>
+              <td class="mono">${fmtMoney(j.cost)}</td>
+              <td><span class="pill">${j.source}</span></td>
+              <td class="muted">${j.created}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div class="pagination">
+        <div>Page ${jobFilters.page}</div>
+        <div class="pgn-btns">
+          <button class="pgn-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="pgn-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+      </div>
+    </div>
+  `;
+  $('#f-agent').value = jobFilters.agent;
+  $('#f-status').value = jobFilters.status;
+  $('#f-agent').onchange = e=>{jobFilters.agent=e.target.value;renderJobs()};
+  $('#f-status').onchange = e=>{jobFilters.status=e.target.value;renderJobs()};
+  const clr = $('#f-clear'); if(clr) clr.onclick = ()=>{jobFilters={agent:'all',status:'all',page:1};renderJobs()};
+}
+
+function renderJobDetail(id){
+  setBreadcrumb('Acefone Marketing Intelligence Hub / Jobs / ' + id);
+  setActiveNav('/jobs');
+  const j = jobs.find(x=>x.id===id);
+  if(!j){ $('#view').innerHTML = `<div class="empty">Job not found</div>`; return; }
+
+  const errBlock = j.status==='error' ? `<div class="alert-box alert-error"><strong>Error:</strong> ${j.error||'Unknown error'}</div>` : '';
+  const runBlock = (j.status==='processing'||j.status==='pending') ? `<div class="alert-box alert-running"><span class="pulse"></span>Agent is running — auto-refreshing every 3 seconds...</div>` : '';
+
+  const sampleMd = `
+    <h2>Executive Summary</h2>
+    <p>The draft is broadly on-target for the head term <code>cloud telephony pricing</code> but has three structural gaps that will limit ranking above position 6.</p>
+    <div class="callout red">🔴 <div><strong>Critical:</strong> Missing schema markup. Add <code>Product</code> + <code>FAQPage</code> JSON-LD before publishing.</div></div>
+    <div class="callout amber">🟡 <div><strong>Warning:</strong> H1 is 78 characters — trim to under 60 for full SERP display.</div></div>
+    <div class="callout blue">🔵 <div><strong>Note:</strong> Internal links to <code>/voip-vs-pstn</code> and <code>/sip-trunking</code> are missing.</div></div>
+    <div class="callout green">🟢 <div><strong>Strength:</strong> Pricing table is comprehensive and well-structured.</div></div>
+
+    <h3>Pre-publish checklist</h3>
+    <div class="check"><input type="checkbox" checked> Add canonical tag</div>
+    <div class="check"><input type="checkbox" checked> Compress hero image</div>
+    <div class="check"><input type="checkbox"> Add FAQ schema</div>
+    <div class="check"><input type="checkbox"> Internal link to pillar page</div>
+
+    <h3>Recommended title rewrite</h3>
+    <blockquote>Cloud Telephony Pricing in 2025 — Plans, Per-Minute Rates & Hidden Fees</blockquote>
+
+    <h3>Keyword coverage</h3>
+    <table>
+      <thead><tr><th>Keyword</th><th>Volume</th><th>Coverage</th></tr></thead>
+      <tbody>
+        <tr><td>cloud telephony pricing</td><td>2,400</td><td>Strong</td></tr>
+        <tr><td>hosted pbx cost</td><td>880</td><td>Partial</td></tr>
+        <tr><td>voip per minute rate</td><td>1,300</td><td>Missing</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Suggested schema</h3>
+    <pre><code>{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Cloud Telephony",
+  "offers": { "@type": "AggregateOffer", "lowPrice": "999" }
+}</code></pre>
+  `;
+
+  $('#view').innerHTML = `
+    <a href="#/jobs" class="back-link">← Back to Jobs</a>
+
+    <div class="card job-head" style="margin-bottom:18px">
+      <div class="row">
+        <div>
+          <h2 class="job-title">${j.title}</h2>
+          <div class="job-agent">${j.agent}</div>
+        </div>
+        ${statusBadge(j.status,true)}
+      </div>
+      <div class="metrics-row">
+        <div class="metric"><div class="m-label">Input Tokens</div><div class="m-value">${fmtNum(j.tokensIn)}</div></div>
+        <div class="metric"><div class="m-label">Output Tokens</div><div class="m-value">${fmtNum(j.tokensOut)}</div></div>
+        <div class="metric"><div class="m-label">Cost</div><div class="m-value">${fmtMoney(j.cost)}</div></div>
+        <div class="metric"><div class="m-label">Source</div><div class="m-value" style="font-size:14px">${j.source}</div></div>
+      </div>
+      <div class="job-foot">
+        <a href="#" class="link-accent">Open in Notion ↗</a>
+        <span class="muted">Created ${j.created}</span>
+      </div>
+    </div>
+
+    ${errBlock}${runBlock}
+
+    <div class="card">
+      <div class="card-head">
+        <h3>Analysis Output</h3>
+        <span class="pill">seo_review</span>
+      </div>
+      <div class="md">${j.status==='done'?sampleMd:'<div class="empty">Output will appear once the job completes.</div>'}</div>
+    </div>
+  `;
+}
+
+let activeTab = 'seo';
+
+function renderTrigger(){
+  setBreadcrumb('Acefone Marketing Intelligence Hub / Trigger Agent');
+  setActiveNav('/trigger');
+
+  const seoForm = `
+    <form id="seo-form">
+      <label class="field">
+        <span class="lbl">Blog Title<span class="req">*</span></span>
+        <input class="input" type="text" required placeholder="e.g. Cloud Telephony Pricing in 2025">
+      </label>
+      <label class="field">
+        <span class="lbl">Blog URL <span class="muted" style="font-weight:400">(optional)</span></span>
+        <input class="input" type="url" placeholder="https://acefone.com/blog/...">
+      </label>
+      <label class="field">
+        <span class="lbl">Blog Content<span class="req">*</span></span>
+        <textarea class="textarea" id="content" rows="14" required placeholder="Paste your draft markdown or plain text..."></textarea>
+        <div class="word-count" id="wc"><span>0 characters</span><span>0 words</span></div>
+      </label>
+      <button class="btn btn-primary" id="seo-submit" type="submit" style="width:100%">Run SEO Analysis →</button>
+    </form>
+  `;
+
+  const blogForm = `
+    <form id="blog-form">
+      <label class="field">
+        <span class="lbl">Blog Title<span class="req">*</span></span>
+        <input class="input" type="text" required placeholder="e.g. How VoIP cuts call center costs">
+      </label>
+      <label class="field">
+        <span class="lbl">Live Blog URL<span class="req">*</span></span>
+        <input class="input" type="url" required placeholder="https://acefone.com/blog/...">
+        <div class="hint">Must be publicly accessible</div>
+      </label>
+      <button class="btn btn-primary" id="blog-submit" type="submit" style="width:100%">Run Blog Review →</button>
+    </form>
+  `;
+
+  $('#view').innerHTML = `
+    <h1 class="page-title">Trigger Agent</h1>
+    <p class="page-sub">Run directly from dashboard — no Notion webhook needed.</p>
+
+    <div class="tabs">
+      <button class="tab ${activeTab==='seo'?'active':''}" data-tab="seo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        SEO Analyzer
+      </button>
+      <button class="tab ${activeTab==='blog'?'active':''}" data-tab="blog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Existing Blog Reviewer
+      </button>
+    </div>
+
+    <div class="info-box">
+      ${activeTab==='seo'
+        ? 'Paste draft blog content for a 5-layer pre-publish SEO review. No Notion required.'
+        : 'Enter a live blog URL — we will crawl the page and run a full post-publish audit.'}
+    </div>
+
+    <div class="card card-pad">
+      ${activeTab==='seo'?seoForm:blogForm}
+      <p class="muted" style="text-align:center;font-size:12px;margin:16px 0 0">After submitting you'll be redirected to the job page. Analysis takes ~30–60 seconds.</p>
+    </div>
+  `;
+
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.onclick = ()=>{ activeTab=t.dataset.tab; renderTrigger(); };
+  });
+
+  if(activeTab==='seo'){
+    const ta = $('#content'); const wc = $('#wc');
+    const update = ()=>{
+      const v = ta.value;
+      const words = v.trim()?v.trim().split(/\s+/).length:0;
+      const warn = words>0 && words<300;
+      wc.innerHTML = `<span class="${warn?'warn':''}">${v.length} characters</span><span class="${warn?'warn':''}">${words} words${warn?' — minimum 300 recommended':''}</span>`;
+    };
+    ta.oninput = update; update();
+    $('#seo-form').onsubmit = e=>{
+      e.preventDefault();
+      const b = $('#seo-submit'); b.disabled=true;
+      b.innerHTML = `<span class="spinner"></span> Running analysis...`;
+      setTimeout(()=>{ location.hash = '#/jobs/j-1042'; }, 1200);
+    };
+  } else {
+    $('#blog-form').onsubmit = e=>{
+      e.preventDefault();
+      const b = $('#blog-submit'); b.disabled=true;
+      b.innerHTML = `<span class="spinner"></span> Crawling & analysing...`;
+      setTimeout(()=>{ location.hash = '#/jobs/j-1041'; }, 1200);
+    };
+  }
+}
+
+/* ---------- Router ---------- */
+function route(){
+  const h = location.hash.replace(/^#/,'') || '/';
+  if(h==='/' || h==='') return renderDashboard();
+  if(h==='/jobs') return renderJobs();
+  if(h.startsWith('/jobs/')) return renderJobDetail(h.split('/')[2]);
+  if(h==='/trigger') return renderTrigger();
+  $('#view').innerHTML = `<div class="empty">Page not found</div>`;
+}
+window.addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>
