@@ -1,8 +1,182 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useParams, NavLink, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { useParams, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useToast } from '../lib/toast';
+
+const REVIEW_STATUS_COLOR: Record<string, string> = {
+  pending_review: '#f0a500', under_review: '#1a56a4', reviewed: '#6b7280',
+  approved: '#1f6f35', rejected: '#b42318', needs_changes: '#92400e',
+};
+const REVIEW_STATUS_LABEL: Record<string, string> = {
+  pending_review: 'Pending Review', under_review: 'Under Review', reviewed: 'Reviewed',
+  approved: 'Approved', rejected: 'Rejected', needs_changes: 'Needs Changes',
+};
+
+function ReviewPanel({ jobId, jobStatus }: { jobId: string; jobStatus: string }) {
+  const qc = useQueryClient();
+  const { user, hasPermission, isManagerInGroup } = useAuth();
+  const [reviewNote, setReviewNote] = useState('');
+  const [leadComment, setLeadComment] = useState('');
+  const [showDecidePanel, setShowDecidePanel] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['review', jobId],
+    queryFn: () => api.getJobReview(jobId),
+    enabled: jobStatus === 'done',
+    retry: false,
+  });
+
+  const review = data?.review;
+  const invalidate = () => { qc.invalidateQueries({ queryKey: ['review', jobId] }); qc.invalidateQueries({ queryKey: ['reviews'] }); };
+
+  const claimMutation    = useMutation({ mutationFn: () => api.claimReview(jobId),    onSuccess: invalidate });
+  const submitMutation   = useMutation({ mutationFn: () => api.submitReview(jobId, reviewNote), onSuccess: () => { invalidate(); setReviewNote(''); } });
+  const approveMutation  = useMutation({ mutationFn: () => api.approveReview(jobId, leadComment || undefined), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); } });
+  const rejectMutation   = useMutation({ mutationFn: () => api.rejectReview(jobId, leadComment || undefined), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); } });
+  const changesMutation  = useMutation({ mutationFn: () => api.needsChanges(jobId, leadComment), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); } });
+
+  if (jobStatus !== 'done') {
+    return <div className="empty">Review available once job completes.</div>;
+  }
+  if (isLoading) return <div className="empty" style={{ padding: 20 }}>Loading review...</div>;
+  if (!review) return <div className="empty">No review record for this job.</div>;
+
+  const isMyReview  = review.reviewerName === user?.username;
+  const canClaim    = hasPermission('jobs:review') && (review.status === 'pending_review' || review.status === 'needs_changes');
+  const canSubmit   = isMyReview && review.status === 'under_review';
+  const isManager   = hasPermission('jobs:approve') && isManagerInGroup(review.groupName);
+  const canDecide   = isManager && review.status === 'reviewed';
+
+  return (
+    <div style={{ padding: 20 }}>
+      {/* Status header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <span style={{
+          fontWeight: 800, fontSize: 13, padding: '4px 12px', borderRadius: 6,
+          background: review.status === 'approved' ? '#f0faf3' : review.status === 'rejected' ? '#fff0f0' : '#f5f7f8',
+          color: REVIEW_STATUS_COLOR[review.status] ?? '#697a82',
+          border: `1px solid ${REVIEW_STATUS_COLOR[review.status] ?? '#e8edf0'}22`,
+        }}>
+          {REVIEW_STATUS_LABEL[review.status] ?? review.status}
+        </span>
+        <span style={{ fontSize: 12, color: '#697a82' }}>Group: <strong>{review.groupName}</strong></span>
+      </div>
+
+      {/* Reviewer step */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 14 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: ['under_review','reviewed','approved','rejected','needs_changes'].includes(review.status) ? '#e8f4ea' : '#f0f3f5',
+            color: ['under_review','reviewed','approved','rejected','needs_changes'].includes(review.status) ? '#1f6f35' : '#9badb5',
+            fontSize: 13, fontWeight: 800,
+          }}>1</div>
+          <div style={{ width: 2, flex: 1, background: '#e8edf0', margin: '4px 0' }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2f38', marginBottom: 4 }}>
+            Member Review
+            {review.reviewerName && <span style={{ marginLeft: 8, fontWeight: 400, color: '#697a82', fontSize: 12 }}>by {review.reviewerName}</span>}
+          </div>
+          {review.reviewNote && (
+            <div style={{ background: '#f5f7f8', borderRadius: 6, padding: '10px 14px', fontSize: 13, color: '#1a2f38', marginBottom: 10, border: '1px solid #e8edf0' }}>
+              {review.reviewNote}
+            </div>
+          )}
+          {canClaim && (
+            <button className="sn-btn sn-btn-primary" style={{ fontSize: 12 }}
+              disabled={claimMutation.isPending}
+              onClick={() => claimMutation.mutate()}>
+              {claimMutation.isPending ? 'Claiming...' : 'Claim for Review'}
+            </button>
+          )}
+          {canSubmit && (
+            <div>
+              <textarea
+                className="sn-textarea"
+                placeholder="Add your review notes — observations, issues found, suggestions..."
+                value={reviewNote}
+                onChange={e => setReviewNote(e.target.value)}
+                style={{ minHeight: 100, marginBottom: 8 }}
+              />
+              <button className="sn-btn sn-btn-primary" style={{ fontSize: 12 }}
+                disabled={!reviewNote.trim() || submitMutation.isPending}
+                onClick={() => submitMutation.mutate()}>
+                {submitMutation.isPending ? 'Submitting...' : 'Submit Review'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Lead/Manager step */}
+      <div style={{ display: 'flex', gap: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 14 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: ['approved','rejected'].includes(review.status) ? '#e8f4ea' : '#f0f3f5',
+            color: ['approved','rejected'].includes(review.status) ? '#1f6f35' : '#9badb5',
+            fontSize: 13, fontWeight: 800,
+          }}>2</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2f38', marginBottom: 4 }}>
+            Manager Decision
+            {review.leadName && <span style={{ marginLeft: 8, fontWeight: 400, color: '#697a82', fontSize: 12 }}>by {review.leadName}</span>}
+          </div>
+          {review.leadComment && (
+            <div style={{ background: '#fffbeb', borderRadius: 6, padding: '10px 14px', fontSize: 13, color: '#1a2f38', marginBottom: 10, border: '1px solid #f0a50033' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e', marginRight: 8 }}>Manager comment:</span>
+              {review.leadComment}
+            </div>
+          )}
+          {canDecide && !showDecidePanel && (
+            <button className="sn-btn" style={{ fontSize: 12 }} onClick={() => setShowDecidePanel(true)}>
+              Make Decision
+            </button>
+          )}
+          {canDecide && showDecidePanel && (
+            <div>
+              <textarea
+                className="sn-textarea"
+                placeholder="Optional comment for the reviewer..."
+                value={leadComment}
+                onChange={e => setLeadComment(e.target.value)}
+                style={{ minHeight: 80, marginBottom: 10 }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="sn-btn" style={{ fontSize: 12, color: '#1f6f35', borderColor: '#1f6f35', fontWeight: 700 }}
+                  disabled={approveMutation.isPending}
+                  onClick={() => approveMutation.mutate()}>
+                  Approve
+                </button>
+                <button className="sn-btn" style={{ fontSize: 12, color: '#92400e', borderColor: '#f0a500', fontWeight: 700 }}
+                  disabled={!leadComment.trim() || changesMutation.isPending}
+                  onClick={() => changesMutation.mutate()}>
+                  Request Changes
+                </button>
+                <button className="sn-btn" style={{ fontSize: 12, color: '#b42318', borderColor: '#b42318', fontWeight: 700 }}
+                  disabled={rejectMutation.isPending}
+                  onClick={() => rejectMutation.mutate()}>
+                  Reject
+                </button>
+                <button className="sn-btn" style={{ fontSize: 12 }} onClick={() => setShowDecidePanel(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {review.status === 'pending_review' && (
+            <div style={{ color: '#9badb5', fontSize: 12 }}>Waiting for member review...</div>
+          )}
+          {review.status === 'under_review' && !isManager && (
+            <div style={{ color: '#9badb5', fontSize: 12 }}>Waiting for reviewer to submit...</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function agentLabel(name: string) {
   const map: Record<string, string> = { 'seo-analyzer': 'SEO Analyzer', 'blog-reviewer': 'Existing Blog Reviewer' };
@@ -67,8 +241,11 @@ function MarkdownView({ content }: { content: string }) {
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('output');
+  const [activeTab, setActiveTab] = useState(
+    (location.state as { openReview?: boolean } | null)?.openReview ? 'review' : 'output'
+  );
   const [following, setFollowing] = useState(false);
   const [copying, setCopying] = useState(false);
 
@@ -107,7 +284,7 @@ export default function JobDetail() {
   }
 
   function handleRunAgain() {
-    navigate('/trigger', { state: { agent: job.agentName } });
+    navigate('/trigger', { state: { agent: job!.agentName } });
   }
 
   return (
@@ -174,6 +351,9 @@ export default function JobDetail() {
             <button className={`tab-btn${activeTab === 'output' ? ' active' : ''}`} onClick={() => setActiveTab('output')}>
               Analysis Output
             </button>
+            <button className={`tab-btn${activeTab === 'review' ? ' active' : ''}`} onClick={() => setActiveTab('review')}>
+              Review
+            </button>
             <button className={`tab-btn${activeTab === 'activity' ? ' active' : ''}`} onClick={() => setActiveTab('activity')}>
               Activity
             </button>
@@ -192,6 +372,9 @@ export default function JobDetail() {
                   </div>
               }
             </div>
+          )}
+          {activeTab === 'review' && id && (
+            <ReviewPanel jobId={id} jobStatus={job.status} />
           )}
           {activeTab === 'activity' && (
             <div className="empty">

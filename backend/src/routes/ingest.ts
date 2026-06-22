@@ -3,7 +3,7 @@ import { ingestAuth } from '../middleware/auth';
 import { createDatabaseEntry } from '../core/notion/writer';
 import { agentRegistry } from '../registry';
 import { db } from '../core/db';
-import { agentJobs } from '../core/db/schema';
+import { agentJobs, blogDrafts } from '../core/db/schema';
 import log from '../logger';
 
 const router = Router();
@@ -47,6 +47,29 @@ router.post('/ingest', ingestAuth, async (req: Request, res: Response) => {
 
   } catch (err: any) {
     log.error({ err: err.message }, 'Ingest failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /ingest/blog-draft — Go routines push new blog drafts here
+router.post('/ingest/blog-draft', ingestAuth, async (req: Request, res: Response) => {
+  const { title, content, url, source } = req.body ?? {};
+
+  if (!title) {
+    res.status(400).json({ error: 'title required' });
+    return;
+  }
+
+  try {
+    const [draft] = await db
+      .insert(blogDrafts)
+      .values({ title, content: content ?? null, url: url ?? null, source: source ?? 'go-routine' })
+      .returning();
+
+    log.info({ draftId: draft.id, title }, 'Blog draft ingested via Go routine');
+    res.json({ id: draft.id, title: draft.title, status: draft.status, createdAt: draft.createdAt });
+  } catch (err: any) {
+    log.error({ err: err.message }, 'Blog draft ingest failed');
     res.status(500).json({ error: err.message });
   }
 });

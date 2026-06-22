@@ -5,6 +5,7 @@ import { createSubpage, updateStatus } from '../../core/notion/writer';
 import { callOpenAI } from '../../core/ai/openai';
 import { crawlUrl } from '../../core/crawler';
 import { createNotification } from '../../core/notifications';
+import { createReviewForJob } from '../../core/reviews';
 import { BLOG_REVIEW_SYSTEM_PROMPT } from './prompt';
 import { eq } from 'drizzle-orm';
 import log from '../../logger';
@@ -91,6 +92,7 @@ ${crawlResult.bodyText.slice(0, 12000)}
       `"${job?.title ?? 'Untitled'}" — $${result.costUsd.toFixed(4)}`,
       jobId,
     );
+    await createReviewForJob(jobId, AGENT_NAME);
 
     log.info({ pageId, jobId, costUsd: result.costUsd.toFixed(6) }, 'Blog Reviewer done');
 
@@ -162,6 +164,7 @@ ${crawlResult.bodyText.slice(0, 12000)}
       `"${title}" — $${result.costUsd.toFixed(4)}`,
       jobId,
     );
+    await createReviewForJob(jobId, AGENT_NAME);
 
     log.info({ jobId, costUsd: result.costUsd.toFixed(6) }, 'Blog Reviewer direct done');
 

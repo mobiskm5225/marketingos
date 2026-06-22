@@ -3,10 +3,16 @@ import crypto from 'crypto';
 const SECRET = () => process.env.JWT_SECRET ?? 'dev-secret-change-in-production';
 const TTL_SECONDS = 7 * 24 * 3600; // 7 days
 
+export interface GroupMembership {
+  group: string;
+  role: 'member' | 'manager';
+}
+
 export interface TokenPayload {
   username: string;
   userId: string;
   permissions: string[];
+  groupMemberships: GroupMembership[];
   exp: number;
 }
 

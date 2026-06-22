@@ -4,6 +4,7 @@ import { agentJobs } from '../core/db/schema';
 import { runSeoAnalyzerDirect } from '../agents/seo-analyzer';
 import { runBlogReviewerDirect } from '../agents/blog-reviewer';
 import { requirePermission } from '../middleware/requirePermission';
+import { logAudit } from '../core/audit';
 import log from '../logger';
 
 const router = Router();
@@ -30,6 +31,7 @@ router.post('/agents/seo-analyzer', requirePermission('agents:trigger:seo-analyz
       .returning();
 
     res.json({ jobId: job.id, status: 'accepted' });
+    logAudit(req.user!.userId, req.user!.username, 'agent.trigger', 'job', job.id, { agent: 'seo-analyzer', title });
 
     runSeoAnalyzerDirect(title, content, url, job.id).catch((err: Error) => {
       log.error({ jobId: job.id, err: err.message }, 'SEO Analyzer direct run failed');
@@ -63,6 +65,7 @@ router.post('/agents/blog-reviewer', requirePermission('agents:trigger:blog-revi
       .returning();
 
     res.json({ jobId: job.id, status: 'accepted' });
+    logAudit(req.user!.userId, req.user!.username, 'agent.trigger', 'job', job.id, { agent: 'blog-reviewer', title });
 
     runBlogReviewerDirect(title, url, job.id).catch((err: Error) => {
       log.error({ jobId: job.id, err: err.message }, 'Blog Reviewer direct run failed');

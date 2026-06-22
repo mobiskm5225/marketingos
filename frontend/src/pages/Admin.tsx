@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-import { api, type AdminUser, type AdminGroup } from '../lib/api';
+import { api, type AdminUser, type AdminGroup, type AuditLog } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
 export default function Admin() {
   const { hasPermission } = useAuth();
-  const navigate = useNavigate();
-  const qc = useQueryClient();
+  const [tab, setTab] = useState<'users' | 'audit'>('users');
 
   if (!hasPermission('admin:users') && !hasPermission('*')) {
     return (
@@ -25,17 +23,35 @@ export default function Admin() {
       <div className="page-titlebar">
         <div>
           <div className="title-kicker">System</div>
-          <h1 className="page-title">User Management</h1>
-          <p className="page-sub">Create users, assign groups, manage access.</p>
+          <h1 className="page-title">Administration</h1>
+          <p className="page-sub">Manage users, groups, and audit activity.</p>
         </div>
         <div className="title-meta">
           <span className="tag"><span className="tag-dot" /> IAM Model</span>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, padding: '0 20px 20px' }}>
-        <UsersPanel />
-        <GroupsPanel />
+      <div style={{ padding: '0 20px', marginBottom: 16, display: 'flex', gap: 0, borderBottom: '2px solid #e8edf0' }}>
+        {(['users', 'audit'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            background: 'none', border: 'none', padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            color: tab === t ? 'var(--sn-accent)' : '#697a82',
+            borderBottom: tab === t ? '2px solid var(--sn-accent)' : '2px solid transparent',
+            marginBottom: -2,
+          }}>
+            {t === 'users' ? 'Users & Groups' : 'Audit Log'}
+          </button>
+        ))}
       </div>
+      {tab === 'users' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, padding: '0 20px 20px' }}>
+          <UsersPanel />
+          <GroupsPanel />
+        </div>
+      ) : (
+        <div style={{ padding: '0 20px 20px' }}>
+          <AuditPanel />
+        </div>
+      )}
     </div>
   );
 }
@@ -80,8 +96,8 @@ function UsersPanel() {
   });
 
   const groupMutation = useMutation({
-    mutationFn: ({ userId, groupIds }: { userId: string; groupIds: string[] }) =>
-      api.setUserGroups(userId, groupIds),
+    mutationFn: ({ userId, groupIds, groupRoles }: { userId: string; groupIds: string[]; groupRoles?: Record<string, 'member' | 'manager'> }) =>
+      api.setUserGroups(userId, groupIds, groupRoles),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       setAssigningId(null);
@@ -133,7 +149,7 @@ function UsersPanel() {
             groups={groups}
             isAssigning={assigningId === u.id}
             onAssignToggle={() => setAssigningId(id => id === u.id ? null : u.id)}
-            onSetGroups={(groupIds) => groupMutation.mutate({ userId: u.id, groupIds })}
+            onSetGroups={(groupIds, groupRoles) => groupMutation.mutate({ userId: u.id, groupIds, groupRoles })}
             onToggleActive={() => activeMutation.mutate({ userId: u.id, isActive: !u.isActive })}
           />
         ))}
@@ -154,19 +170,36 @@ function UserRow({
   groups: AdminGroup[];
   isAssigning: boolean;
   onAssignToggle: () => void;
-  onSetGroups: (ids: string[]) => void;
+  onSetGroups: (ids: string[], roles: Record<string, 'member' | 'manager'>) => void;
   onToggleActive: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [roles, setRoles]       = useState<Record<string, 'member' | 'manager'>>({});
 
   function openAssign() {
     const currentIds = groups.filter(g => user.groups.includes(g.name)).map(g => g.id);
+    const currentRoles: Record<string, 'member' | 'manager'> = {};
+    groups.forEach(g => {
+      if (currentIds.includes(g.id)) {
+        const membership = (user as any).groupMemberships?.find((m: any) => m.group === g.name);
+        currentRoles[g.id] = membership?.role ?? 'member';
+      }
+    });
     setSelected(currentIds);
+    setRoles(currentRoles);
     onAssignToggle();
   }
 
   function toggle(id: string) {
-    setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+    setSelected(s => {
+      if (s.includes(id)) { return s.filter(x => x !== id); }
+      setRoles(r => ({ ...r, [id]: r[id] ?? 'member' }));
+      return [...s, id];
+    });
+  }
+
+  function setRole(id: string, role: 'member' | 'manager') {
+    setRoles(r => ({ ...r, [id]: role }));
   }
 
   return (
@@ -202,18 +235,34 @@ function UserRow({
       </div>
       {isAssigning && (
         <div style={{ padding: '8px 18px 14px 60px', background: '#f9fbfc', borderTop: '1px solid #e8edf0' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#697a82', marginBottom: 8 }}>Assign groups:</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-            {groups.map(g => (
-              <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12 }}>
-                <input type="checkbox" checked={selected.includes(g.id)} onChange={() => toggle(g.id)} />
-                {g.name}
-              </label>
-            ))}
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#697a82', marginBottom: 10 }}>Assign groups + role:</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {groups.map(g => {
+              const checked = selected.includes(g.id);
+              const role    = roles[g.id] ?? 'member';
+              return (
+                <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, minWidth: 160 }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggle(g.id)} />
+                    <span style={{ fontWeight: checked ? 700 : 400, color: checked ? '#1a2f38' : '#697a82' }}>{g.name}</span>
+                  </label>
+                  {checked && (
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {(['member', 'manager'] as const).map(r => (
+                        <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11 }}>
+                          <input type="radio" name={`role-${g.id}`} checked={role === r} onChange={() => setRole(g.id, r)} />
+                          <span style={{ color: r === 'manager' ? '#1f6f35' : '#1a56a4', fontWeight: 700 }}>{r}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="sn-btn" style={{ fontSize: 11 }} onClick={onAssignToggle}>Cancel</button>
-            <button className="sn-btn sn-btn-primary" style={{ fontSize: 11 }} onClick={() => onSetGroups(selected)}>Save</button>
+            <button className="sn-btn sn-btn-primary" style={{ fontSize: 11 }} onClick={() => onSetGroups(selected, roles)}>Save</button>
           </div>
         </div>
       )}
@@ -258,6 +307,117 @@ function GroupsPanel() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Audit Log panel ──────────────────────────────────────────────────────────
+const PAGE_SIZE = 50;
+
+function AuditPanel() {
+  const [offset, setOffset] = useState(0);
+  const [filterAction, setFilterAction] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [inputAction, setInputAction] = useState('');
+  const [inputUser, setInputUser] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['audit', offset, filterAction, filterUser],
+    queryFn: () => api.getAuditLogs({
+      limit: PAGE_SIZE, offset,
+      action: filterAction || undefined,
+      username: filterUser || undefined,
+    }),
+  });
+
+  const logs = data?.logs ?? [];
+
+  function applyFilters() {
+    setFilterAction(inputAction);
+    setFilterUser(inputUser);
+    setOffset(0);
+  }
+  function clearFilters() {
+    setInputAction(''); setInputUser('');
+    setFilterAction(''); setFilterUser('');
+    setOffset(0);
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleString();
+  }
+  function fmtMeta(raw: string | null) {
+    if (!raw) return '—';
+    try { return JSON.stringify(JSON.parse(raw), null, 0); } catch { return raw; }
+  }
+
+  return (
+    <div className="sn-card" style={{ padding: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: '1px solid #e8edf0', flexWrap: 'wrap' }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: '#1a2f38', marginRight: 'auto' }}>Audit Log</div>
+        <input className="sn-input" placeholder="Filter action..." value={inputAction}
+          style={{ width: 160 }} onChange={e => setInputAction(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && applyFilters()} />
+        <input className="sn-input" placeholder="Filter user..." value={inputUser}
+          style={{ width: 130 }} onChange={e => setInputUser(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && applyFilters()} />
+        <button className="sn-btn sn-btn-primary" style={{ fontSize: 12 }} onClick={applyFilters}>Filter</button>
+        {(filterAction || filterUser) && (
+          <button className="sn-btn" style={{ fontSize: 12 }} onClick={clearFilters}>Clear</button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div style={{ padding: 30, textAlign: 'center', color: '#697a82', fontSize: 13 }}>Loading...</div>
+      ) : logs.length === 0 ? (
+        <div style={{ padding: 40, textAlign: 'center', color: '#697a82', fontSize: 13 }}>No audit entries found.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e8edf0', background: '#f5f7f8' }}>
+                {['Time', 'User', 'Action', 'Entity', 'Details'].map(h => (
+                  <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#697a82', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log: AuditLog) => (
+                <tr key={log.id} style={{ borderBottom: '1px solid #f0f3f5' }}>
+                  <td style={{ padding: '8px 14px', color: '#697a82', whiteSpace: 'nowrap' }}>{fmtDate(log.createdAt)}</td>
+                  <td style={{ padding: '8px 14px', fontWeight: 700, color: '#1a2f38' }}>{log.username}</td>
+                  <td style={{ padding: '8px 14px' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, background: '#f0f4ff', color: '#1a4fa0', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>
+                      {log.action}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px 14px', color: '#697a82', fontSize: 11 }}>
+                    {log.entityType ? `${log.entityType}${log.entityId ? ` · ${log.entityId.slice(0, 8)}…` : ''}` : '—'}
+                  </td>
+                  <td style={{ padding: '8px 14px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#697a82', fontSize: 11, fontFamily: 'monospace' }}
+                    title={fmtMeta(log.metadata)}>
+                    {fmtMeta(log.metadata)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, padding: '10px 18px', borderTop: '1px solid #e8edf0', justifyContent: 'flex-end' }}>
+        <button className="sn-btn" style={{ fontSize: 12 }} disabled={offset === 0}
+          onClick={() => setOffset(o => Math.max(0, o - PAGE_SIZE))}>
+          ← Prev
+        </button>
+        <span style={{ fontSize: 12, color: '#697a82', alignSelf: 'center' }}>
+          {offset + 1}–{offset + logs.length}
+        </span>
+        <button className="sn-btn" style={{ fontSize: 12 }} disabled={logs.length < PAGE_SIZE}
+          onClick={() => setOffset(o => o + PAGE_SIZE)}>
+          Next →
+        </button>
+      </div>
     </div>
   );
 }

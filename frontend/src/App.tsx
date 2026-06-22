@@ -12,6 +12,11 @@ import Trigger from './pages/Trigger';
 import Errors from './pages/Errors';
 import ActiveRuns from './pages/ActiveRuns';
 import Admin from './pages/Admin';
+import ReviewQueue from './pages/ReviewQueue';
+import SeoAnalyzerJobs from './pages/SeoAnalyzerJobs';
+import BlogReviewerJobs from './pages/BlogReviewerJobs';
+import BlogDrafts from './pages/BlogDrafts';
+import TeamManagement from './pages/TeamManagement';
 import Login from './pages/Login';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
@@ -21,19 +26,26 @@ const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } 
 const ALL_NAV_ITEMS = [
   { to: '/',        end: true,  label: 'Dashboard',     perm: null                },
   { to: '/trigger', end: false, label: 'Trigger Agent', perm: '__canTrigger__'    },
+  { to: '/reviews', end: false, label: 'Review Queue',  perm: 'jobs:review'       },
+  { to: '/team',    end: false, label: 'My Team',       perm: '__isManager__'     },
   { to: '/admin',   end: false, label: 'Admin',         perm: 'admin:users'       },
 ];
 
 const LIST_ITEMS = [
-  { to: '/jobs',        label: 'All Jobs'    },
-  { to: '/jobs/active', label: 'Active Runs' },
-  { to: '/errors',      label: 'Errors'      },
+  { to: '/jobs',              label: 'All Jobs',              perm: null                        },
+  { to: '/jobs/active',       label: 'Active Runs',           perm: null                        },
+  { to: '/errors',            label: 'Errors',                perm: null                        },
+  { to: '/agents/seo',        label: 'SEO Analyzer',          perm: 'agents:trigger:seo-analyzer' },
+  { to: '/agents/blog-reviewer', label: 'Existing Blog Reviewer', perm: 'agents:trigger:blog-reviewer' },
+  { to: '/blog-drafts',       label: 'Blog Drafts',           perm: 'blog-drafts:manage'        },
 ];
 
 const ALL_TAB_ROUTES = [
   { to: '/',        label: 'Dashboard',     perm: null             },
   { to: '/jobs',    label: 'Jobs',          perm: null             },
   { to: '/trigger', label: 'Trigger Agent', perm: '__canTrigger__' },
+  { to: '/reviews', label: 'Review Queue',  perm: 'jobs:review'    },
+  { to: '/team',    label: 'My Team',       perm: '__isManager__'  },
   { to: '/admin',   label: 'Admin',         perm: 'admin:users'    },
 ];
 
@@ -73,20 +85,25 @@ function Rail() {
 function AppNav({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const [filter, setFilter]   = useState('');
   const [navTab, setNavTab]   = useState<'all' | 'favorites'>('all');
-  const { hasPermission }     = useAuth();
+  const { hasPermission, isManagerInGroup, myGroups } = useAuth();
 
   const canTrigger = hasPermission('agents:trigger:seo-analyzer') || hasPermission('agents:trigger:blog-reviewer');
+  const isAnyManager = myGroups.some(g => isManagerInGroup(g));
   const NAV_ITEMS = ALL_NAV_ITEMS.filter(item => {
     if (item.perm === '__canTrigger__') return canTrigger;
+    if (item.perm === '__isManager__')  return isAnyManager;
     if (item.perm) return hasPermission(item.perm);
     return true;
   });
 
   const match = (label: string) => !filter || label.toLowerCase().includes(filter.toLowerCase());
 
-  const visibleNav   = NAV_ITEMS.filter(x => match(x.label));
-  const visibleList  = LIST_ITEMS.filter(x => match(x.label));
-  const noResults    = !!filter && !visibleNav.length && !visibleList.length;
+  const visibleNav  = NAV_ITEMS.filter(x => match(x.label));
+  const visibleList = LIST_ITEMS.filter(x => {
+    if (x.perm && !hasPermission(x.perm)) return false;
+    return match(x.label);
+  });
+  const noResults   = !!filter && !visibleNav.length && !visibleList.length;
 
   return (
     <aside className="sn-nav" style={{ width: open ? 264 : 0, overflow: 'hidden', transition: 'width .2s ease' }}>
@@ -257,13 +274,15 @@ function Header({ onNavToggle }: { onNavToggle: () => void }) {
 function WorkspaceTabs() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isManagerInGroup, myGroups } = useAuth();
   const isJobDetail = pathname.startsWith('/jobs/') && pathname !== '/jobs' && pathname !== '/jobs/active';
   const jobId = isJobDetail ? pathname.split('/')[2] : null;
 
-  const canTrigger = hasPermission('agents:trigger:seo-analyzer') || hasPermission('agents:trigger:blog-reviewer');
+  const canTrigger   = hasPermission('agents:trigger:seo-analyzer') || hasPermission('agents:trigger:blog-reviewer');
+  const isAnyManager = myGroups.some(g => isManagerInGroup(g));
   const TAB_ROUTES = ALL_TAB_ROUTES.filter(item => {
     if (item.perm === '__canTrigger__') return canTrigger;
+    if (item.perm === '__isManager__')  return isAnyManager;
     if (item.perm) return hasPermission(item.perm);
     return true;
   });
@@ -315,6 +334,11 @@ function AppShell() {
             <Route path="/jobs/:id" element={<JobDetail />} />
             <Route path="/trigger" element={<Trigger />} />
             <Route path="/errors" element={<Errors />} />
+            <Route path="/reviews" element={<ReviewQueue />} />
+            <Route path="/agents/seo" element={<SeoAnalyzerJobs />} />
+            <Route path="/agents/blog-reviewer" element={<BlogReviewerJobs />} />
+            <Route path="/blog-drafts" element={<BlogDrafts />} />
+            <Route path="/team" element={<TeamManagement />} />
             <Route path="/admin" element={<Admin />} />
           </Routes>
         </main>

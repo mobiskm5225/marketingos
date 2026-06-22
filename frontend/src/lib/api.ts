@@ -103,6 +103,63 @@ export async function apiPost<T>(path: string, body: object): Promise<T> {
   return res.json();
 }
 
+// ─── Review types ─────────────────────────────────────────────────────────────
+
+export interface JobReview {
+  id: string;
+  jobId: string;
+  groupName: string;
+  status: 'pending_review' | 'under_review' | 'reviewed' | 'approved' | 'rejected' | 'needs_changes';
+  reviewerId: string | null;
+  reviewerName: string | null;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  leadId: string | null;
+  leadName: string | null;
+  leadComment: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  jobTitle?: string | null;
+  jobAgentName?: string;
+  jobStatus?: string;
+}
+
+export interface TeamMember {
+  userId: string;
+  username: string;
+  email: string | null;
+  isActive: boolean;
+  groupName: string;
+  groupRole: 'member' | 'manager';
+}
+
+export interface BlogDraft {
+  id: string;
+  title: string;
+  content: string | null;
+  url: string | null;
+  source: string | null;
+  status: 'pending' | 'in_review' | 'approved' | 'rejected';
+  reviewerId: string | null;
+  reviewerName: string | null;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string | null;
+  username: string;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: string | null;
+  createdAt: string;
+}
+
 // ─── Admin types ──────────────────────────────────────────────────────────────
 
 export interface AdminUser {
@@ -151,9 +208,54 @@ export const api = {
   listUsers:       () => get<{ users: AdminUser[] }>('/admin/users'),
   createUser:      (body: { username: string; password: string; email?: string }) =>
     apiPost<{ user: AdminUser }>('/admin/users', body),
-  setUserGroups:   (userId: string, groupIds: string[]) =>
-    apiPatch<{ ok: boolean; groups: string[]; permissions: string[] }>(`/admin/users/${userId}/groups`, { groupIds }),
+  setUserGroups:   (userId: string, groupIds: string[], groupRoles?: Record<string, 'member' | 'manager'>) =>
+    apiPatch<{ ok: boolean; groups: string[]; permissions: string[] }>(`/admin/users/${userId}/groups`, { groupIds, groupRoles }),
   setUserActive:   (userId: string, isActive: boolean) =>
     apiPatch<{ ok: boolean }>(`/admin/users/${userId}/active`, { isActive }),
   listGroups:      () => get<{ groups: AdminGroup[] }>('/admin/groups'),
+
+  // Reviews
+  getReviews:       (status?: string) => get<{ reviews: JobReview[] }>(`/reviews${status ? `?status=${status}` : ''}`),
+  getJobReview:     (jobId: string) => get<{ review: JobReview }>(`/jobs/${jobId}/review`),
+  claimReview:      (jobId: string) => apiPost<{ review: JobReview }>(`/jobs/${jobId}/review/claim`, {}),
+  submitReview:     (jobId: string, reviewNote: string) => apiPost<{ review: JobReview }>(`/jobs/${jobId}/review/submit`, { reviewNote }),
+  approveReview:    (jobId: string, leadComment?: string) => apiPost<{ review: JobReview }>(`/jobs/${jobId}/review/approve`, { leadComment }),
+  rejectReview:     (jobId: string, leadComment?: string) => apiPost<{ review: JobReview }>(`/jobs/${jobId}/review/reject`, { leadComment }),
+  needsChanges:     (jobId: string, leadComment: string) => apiPost<{ review: JobReview }>(`/jobs/${jobId}/review/needs-changes`, { leadComment }),
+
+  // Team management (group managers)
+  getTeam: () => get<{ members: TeamMember[]; managedGroups: string[] }>('/team'),
+  getTeamCandidates: (groupName: string) => get<{ candidates: { id: string; username: string; email: string | null }[] }>(`/team/candidates/${encodeURIComponent(groupName)}`),
+  addTeamMember:    (groupName: string, userId: string, role: 'member' | 'manager') =>
+    apiPost<{ ok: boolean }>(`/team/${encodeURIComponent(groupName)}/members`, { userId, role }),
+  setTeamRole:      (groupName: string, userId: string, role: 'member' | 'manager') =>
+    apiPatch<{ ok: boolean }>(`/team/${encodeURIComponent(groupName)}/members/${userId}/role`, { role }),
+  removeTeamMember: (groupName: string, userId: string) =>
+    fetch(`/api/team/${encodeURIComponent(groupName)}/members/${userId}`, {
+      method: 'DELETE', headers: { ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
+    }).then(r => r.json()) as Promise<{ ok: boolean }>,
+
+  // Blog Drafts
+  getBlogDrafts:   (params?: { status?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.limit)  q.set('limit',  String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return get<{ drafts: BlogDraft[] }>(`/blog-drafts${qs ? `?${qs}` : ''}`);
+  },
+  getBlogDraft:    (id: string) => get<{ draft: BlogDraft }>(`/blog-drafts/${id}`),
+  updateBlogDraft: (id: string, body: { status?: string; reviewNote?: string }) =>
+    apiPatch<{ draft: BlogDraft }>(`/blog-drafts/${id}`, body),
+
+  // Audit
+  getAuditLogs:    (params?: { limit?: number; offset?: number; action?: string; username?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.limit)    q.set('limit',    String(params.limit));
+    if (params?.offset)   q.set('offset',   String(params.offset));
+    if (params?.action)   q.set('action',   params.action);
+    if (params?.username) q.set('username', params.username);
+    const qs = q.toString();
+    return get<{ logs: AuditLog[] }>(`/admin/audit${qs ? `?${qs}` : ''}`);
+  },
 };

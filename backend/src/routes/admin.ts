@@ -1,15 +1,17 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
-import { eq, count } from 'drizzle-orm';
+import { eq, count, desc } from 'drizzle-orm';
 import { db } from '../core/db';
-import { users, groups, permissions, groupPermissions, userGroups } from '../core/db/schema';
+import { users, groups, permissions, groupPermissions, userGroups, auditLogs } from '../core/db/schema';
 import { requireAuth } from '../middleware/requireAuth';
 import { requirePermission } from '../middleware/requirePermission';
-import { loadUserPermissions, loadUserGroupNames } from './auth';
+import { loadUserPermissions, loadUserGroupNames, loadUserGroupMemberships } from './auth';
+import { logAudit } from '../core/audit';
 
 const router = Router();
 const canUsers  = [requireAuth, requirePermission('admin:users')];
 const canGroups = [requireAuth, requirePermission('admin:groups')];
+const canAudit  = [requireAuth, requirePermission('admin:audit')];
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
@@ -23,10 +25,10 @@ router.get('/admin/users', ...canUsers, async (_req, res) => {
     createdAt: users.createdAt,
   }).from(users).orderBy(users.createdAt);
 
-  const withGroups = await Promise.all(allUsers.map(async u => ({
-    ...u,
-    groups: await loadUserGroupNames(u.id),
-  })));
+  const withGroups = await Promise.all(allUsers.map(async u => {
+    const memberships = await loadUserGroupMemberships(u.id);
+    return { ...u, groups: memberships.map(m => m.group), groupMemberships: memberships };
+  }));
 
   res.json({ users: withGroups });
 });
@@ -45,7 +47,9 @@ router.post('/admin/users', ...canUsers, async (req, res) => {
       .insert(users)
       .values({ username, passwordHash, email: email ?? null })
       .returning({ id: users.id, username: users.username, email: users.email, isActive: users.isActive, createdAt: users.createdAt });
-    res.status(201).json({ user: { ...user, groups: [] } });
+
+    await logAudit(req.user!.userId, req.user!.username, 'admin.user_created', 'user', user.id, { createdUsername: username });
+    res.status(201).json({ user: { ...user, groups: [], groupMemberships: [] } });
   } catch (err: any) {
     if (err.message?.includes('unique')) {
       res.status(409).json({ error: 'Username already exists' });
@@ -55,10 +59,11 @@ router.post('/admin/users', ...canUsers, async (req, res) => {
   }
 });
 
-// PATCH /api/admin/users/:id/groups — set user's groups (replaces existing)
+// PATCH /api/admin/users/:id/groups — set groups + roles
+// Body: { groupIds: string[], groupRoles?: { [groupId]: 'member' | 'manager' } }
 router.patch('/admin/users/:id/groups', ...canUsers, async (req, res) => {
   const id = String(req.params.id);
-  const { groupIds } = req.body ?? {};
+  const { groupIds, groupRoles } = req.body ?? {};
   if (!Array.isArray(groupIds)) {
     res.status(400).json({ error: 'groupIds must be an array' });
     return;
@@ -66,15 +71,26 @@ router.patch('/admin/users/:id/groups', ...canUsers, async (req, res) => {
 
   await db.delete(userGroups).where(eq(userGroups.userId, id));
   if (groupIds.length > 0) {
-    await db.insert(userGroups).values((groupIds as string[]).map(gid => ({ userId: id, groupId: gid })));
+    await db.insert(userGroups).values(
+      (groupIds as string[]).map(gid => ({
+        userId:    id,
+        groupId:   gid,
+        groupRole: (groupRoles?.[gid] as 'member' | 'manager') ?? 'member',
+      }))
+    );
   }
 
-  const groupNames = await loadUserGroupNames(id);
-  const perms = await loadUserPermissions(id);
-  res.json({ ok: true, groups: groupNames, permissions: perms });
+  const [groupNames, perms, memberships] = await Promise.all([
+    loadUserGroupNames(id),
+    loadUserPermissions(id),
+    loadUserGroupMemberships(id),
+  ]);
+
+  await logAudit(req.user!.userId, req.user!.username, 'admin.user_groups_updated', 'user', id, { groups: groupNames });
+  res.json({ ok: true, groups: groupNames, groupMemberships: memberships, permissions: perms });
 });
 
-// PATCH /api/admin/users/:id/active — activate / deactivate
+// PATCH /api/admin/users/:id/active
 router.patch('/admin/users/:id/active', ...canUsers, async (req, res) => {
   const id = String(req.params.id);
   const { isActive } = req.body ?? {};
@@ -83,6 +99,7 @@ router.patch('/admin/users/:id/active', ...canUsers, async (req, res) => {
     return;
   }
   await db.update(users).set({ isActive, updatedAt: new Date() }).where(eq(users.id, id));
+  await logAudit(req.user!.userId, req.user!.username, isActive ? 'admin.user_activated' : 'admin.user_deactivated', 'user', id);
   res.json({ ok: true });
 });
 
@@ -104,10 +121,31 @@ router.get('/admin/groups', ...canGroups, async (_req, res) => {
   res.json({ groups: withPerms });
 });
 
-// GET /api/admin/users/:id/count (used by frontend to confirm user exists)
+// GET /api/admin/stats
 router.get('/admin/stats', ...canUsers, async (_req, res) => {
   const [{ cnt }] = await db.select({ cnt: count() }).from(users);
   res.json({ totalUsers: Number(cnt) });
+});
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+// GET /api/admin/audit?limit=50&offset=0&action=&username=
+router.get('/admin/audit', ...canAudit, async (req, res) => {
+  const limit  = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Number(req.query.offset) || 0;
+
+  const rows = await db
+    .select()
+    .from(auditLogs)
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  let filtered = rows;
+  if (req.query.action)   filtered = filtered.filter(r => r.action.includes(String(req.query.action)));
+  if (req.query.username) filtered = filtered.filter(r => r.username.includes(String(req.query.username)));
+
+  res.json({ logs: filtered, limit, offset });
 });
 
 export default router;

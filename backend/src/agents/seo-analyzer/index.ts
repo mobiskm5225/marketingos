@@ -4,6 +4,7 @@ import { getPageContent, getPageProperties } from '../../core/notion/reader';
 import { createSubpage, updateStatus } from '../../core/notion/writer';
 import { callOpenAI } from '../../core/ai/openai';
 import { createNotification } from '../../core/notifications';
+import { createReviewForJob } from '../../core/reviews';
 import { SEO_SYSTEM_PROMPT } from './prompt';
 import { eq } from 'drizzle-orm';
 import log from '../../logger';
@@ -72,6 +73,7 @@ export async function runSeoAnalyzer(
       `"${job?.title ?? 'Untitled'}" — $${result.costUsd.toFixed(4)}`,
       jobId,
     );
+    await createReviewForJob(jobId, AGENT_NAME);
 
     log.info({ pageId, jobId, costUsd: result.costUsd.toFixed(6) }, 'SEO Analyzer done');
 
@@ -135,6 +137,7 @@ export async function runSeoAnalyzerDirect(
       `"${title}" — $${result.costUsd.toFixed(4)}`,
       jobId,
     );
+    await createReviewForJob(jobId, AGENT_NAME);
 
     log.info({ jobId, costUsd: result.costUsd.toFixed(6) }, 'SEO Analyzer direct done');
 

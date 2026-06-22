@@ -8,7 +8,8 @@
     "start": "node --require tsx/cjs src/index.ts",
     "build": "tsc",
     "backfill": "node --require tsx/cjs scripts/backfill.ts",
-    "db:migrate": "node --require tsx/cjs scripts/migrate.ts"
+    "db:migrate": "node --require tsx/cjs scripts/migrate.ts",
+    "seed": "node --require tsx/cjs scripts/seed-admin.ts"
   },
   "keywords": [],
   "author": "",

@@ -62,9 +62,57 @@ export const groupPermissions = pgTable('group_permissions', {
 }, t => ({ pk: primaryKey({ columns: [t.groupId, t.permissionId] }) }));
 
 export const userGroups = pgTable('user_groups', {
-  userId:  uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  groupId: uuid('group_id').notNull().references(() => groups.id, { onDelete: 'cascade' }),
+  userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  groupId:   uuid('group_id').notNull().references(() => groups.id, { onDelete: 'cascade' }),
+  groupRole: varchar('group_role', { length: 20 }).notNull().default('member'),
 }, t => ({ pk: primaryKey({ columns: [t.userId, t.groupId] }) }));
+
+// ─── Audit + Review ──────────────────────────────────────────────────────────
+
+export const auditLogs = pgTable('audit_logs', {
+  id:         uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  userId:     uuid('user_id'),
+  username:   varchar('username', { length: 50 }).notNull(),
+  action:     varchar('action', { length: 100 }).notNull(),
+  entityType: varchar('entity_type', { length: 50 }),
+  entityId:   uuid('entity_id'),
+  metadata:   text('metadata'),
+  createdAt:  timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+export const jobReviews = pgTable('job_reviews', {
+  id:           uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  jobId:        uuid('job_id').notNull().references(() => agentJobs.id, { onDelete: 'cascade' }),
+  groupName:    varchar('group_name', { length: 50 }).notNull(),
+  status:       varchar('status', { length: 30 }).notNull().default('pending_review'),
+  reviewerId:   uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
+  reviewerName: varchar('reviewer_name', { length: 50 }),
+  reviewNote:   text('review_note'),
+  reviewedAt:   timestamp('reviewed_at', { withTimezone: true }),
+  leadId:       uuid('lead_id').references(() => users.id, { onDelete: 'set null' }),
+  leadName:     varchar('lead_name', { length: 50 }),
+  leadComment:  text('lead_comment'),
+  decidedAt:    timestamp('decided_at', { withTimezone: true }),
+  createdAt:    timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+  updatedAt:    timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+// ─── Blog Drafts ─────────────────────────────────────────────────────────────
+
+export const blogDrafts = pgTable('blog_drafts', {
+  id:           uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  title:        text('title').notNull(),
+  content:      text('content'),
+  url:          text('url'),
+  source:       varchar('source', { length: 100 }).default('api'),
+  status:       varchar('status', { length: 30 }).notNull().default('pending'),
+  reviewerId:   uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
+  reviewerName: varchar('reviewer_name', { length: 50 }),
+  reviewNote:   text('review_note'),
+  reviewedAt:   timestamp('reviewed_at', { withTimezone: true }),
+  createdAt:    timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+  updatedAt:    timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
 
 // ─── Notifications ────────────────────────────────────────────────────────────
 

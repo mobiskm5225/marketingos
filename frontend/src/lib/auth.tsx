@@ -1,9 +1,15 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
+export interface GroupMembership {
+  group: string;
+  role: 'member' | 'manager';
+}
+
 export interface AuthUser {
   username: string;
   userId: string;
   permissions: string[];
+  groupMemberships: GroupMembership[];
 }
 
 interface AuthCtx {
@@ -13,6 +19,8 @@ interface AuthCtx {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   hasPermission: (perm: string) => boolean;
+  isManagerInGroup: (groupName: string) => boolean;
+  myGroups: string[];
 }
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);
@@ -70,8 +78,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return perms.includes('*') || perms.includes(perm);
   }
 
+  function isManagerInGroup(groupName: string): boolean {
+    if (hasPermission('*')) return true;
+    return (user?.groupMemberships ?? []).some(m => m.group === groupName && m.role === 'manager');
+  }
+
+  const myGroups = (user?.groupMemberships ?? []).map(m => m.group);
+
   return (
-    <Ctx.Provider value={{ user, token, isLoading, login, logout, hasPermission }}>
+    <Ctx.Provider value={{ user, token, isLoading, login, logout, hasPermission, isManagerInGroup, myGroups }}>
       {children}
     </Ctx.Provider>
   );
