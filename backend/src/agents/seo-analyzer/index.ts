@@ -3,6 +3,7 @@ import { agentJobs, agentResults } from '../../core/db/schema';
 import { getPageContent, getPageProperties } from '../../core/notion/reader';
 import { createSubpage, updateStatus } from '../../core/notion/writer';
 import { callOpenAI } from '../../core/ai/openai';
+import { createNotification } from '../../core/notifications';
 import { SEO_SYSTEM_PROMPT } from './prompt';
 import { eq } from 'drizzle-orm';
 import log from '../../logger';
@@ -64,10 +65,19 @@ export async function runSeoAnalyzer(
       content: result.text,
     });
 
+    const [job] = await db.select({ title: agentJobs.title }).from(agentJobs).where(eq(agentJobs.id, jobId));
+    await createNotification(
+      'job_done',
+      'SEO Analysis complete',
+      `"${job?.title ?? 'Untitled'}" — $${result.costUsd.toFixed(4)}`,
+      jobId,
+    );
+
     log.info({ pageId, jobId, costUsd: result.costUsd.toFixed(6) }, 'SEO Analyzer done');
 
   } catch (err: any) {
     log.error({ pageId, jobId, err: err.message }, 'SEO Analyzer failed');
+    await createNotification('job_error', 'SEO Analysis failed', err.message, jobId);
     try {
       await updateStatus(pageId, STATUS_PROP, 'Error');
     } catch { /* swallow */ }
@@ -119,10 +129,18 @@ export async function runSeoAnalyzerDirect(
       content: result.text,
     });
 
+    await createNotification(
+      'job_done',
+      'SEO Analysis complete',
+      `"${title}" — $${result.costUsd.toFixed(4)}`,
+      jobId,
+    );
+
     log.info({ jobId, costUsd: result.costUsd.toFixed(6) }, 'SEO Analyzer direct done');
 
   } catch (err: any) {
     log.error({ jobId, err: err.message }, 'SEO Analyzer direct failed');
+    await createNotification('job_error', 'SEO Analysis failed', err.message, jobId);
     try {
       await db.update(agentJobs).set({
         status: 'error',

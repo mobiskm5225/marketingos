@@ -1,20 +1,26 @@
 ﻿import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiPost } from '../lib/api';
+import { useAuth } from '../lib/auth';
 
 type AgentTab = 'seo' | 'blog';
 
-function agentToTab(agentName?: string): AgentTab {
+function agentToTab(agentName?: string, canSeo?: boolean): AgentTab {
   if (agentName === 'blog-reviewer') return 'blog';
+  if (!canSeo) return 'blog';
   return 'seo';
 }
 
 export default function Trigger() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { hasPermission } = useAuth();
   const initialAgent = (location.state as { agent?: string } | null)?.agent;
 
-  const [tab, setTab] = useState<AgentTab>(agentToTab(initialAgent));
+  const canSeo  = hasPermission('agents:trigger:seo-analyzer');
+  const canBlog = hasPermission('agents:trigger:blog-reviewer');
+
+  const [tab, setTab] = useState<AgentTab>(agentToTab(initialAgent, canSeo));
 
   const [seoTitle, setSeoTitle]     = useState('');
   const [seoContent, setSeoContent] = useState('');
@@ -98,17 +104,19 @@ export default function Trigger() {
       </div>
 
       <div className="sn-card">
-        <div className="tab-buttons">
-          <button className={`tab-btn${tab === 'seo' ? ' active' : ''}`} type="button" onClick={() => setTab('seo')}>
-            SEO Analyzer
-          </button>
-          <button className={`tab-btn${tab === 'blog' ? ' active' : ''}`} type="button" onClick={() => setTab('blog')}>
-            Existing Blog Reviewer
-          </button>
-        </div>
+        {(canSeo && canBlog) && (
+          <div className="tab-buttons">
+            <button className={`tab-btn${tab === 'seo' ? ' active' : ''}`} type="button" onClick={() => setTab('seo')}>
+              SEO Analyzer
+            </button>
+            <button className={`tab-btn${tab === 'blog' ? ' active' : ''}`} type="button" onClick={() => setTab('blog')}>
+              Existing Blog Reviewer
+            </button>
+          </div>
+        )}
 
         <div className="card-body">
-          {tab === 'seo' ? (
+          {(tab === 'seo' && canSeo) ? (
             <>
               <div className="info-message">
                 <strong>Info</strong>
@@ -149,7 +157,7 @@ export default function Trigger() {
                 </div>
               </form>
             </>
-          ) : (
+          ) : canBlog ? (
             <>
               <div className="info-message">
                 <strong>Info</strong>
@@ -180,6 +188,10 @@ export default function Trigger() {
                 </div>
               </form>
             </>
+          ) : (
+            <div style={{ padding: '40px 16px', textAlign: 'center', color: '#697a82', fontSize: 13 }}>
+              You don't have permission to trigger any agents.
+            </div>
           )}
         </div>
       </div>

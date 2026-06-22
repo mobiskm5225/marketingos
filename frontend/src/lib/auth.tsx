@@ -1,6 +1,10 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
-export interface AuthUser { username: string; }
+export interface AuthUser {
+  username: string;
+  userId: string;
+  permissions: string[];
+}
 
 interface AuthCtx {
   user: AuthUser | null;
@@ -8,6 +12,7 @@ interface AuthCtx {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  hasPermission: (perm: string) => boolean;
 }
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);
@@ -23,11 +28,10 @@ export function clearToken(): void {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]       = useState<AuthUser | null>(null);
-  const [token, setToken]     = useState<string | null>(getToken());
+  const [user, setUser]           = useState<AuthUser | null>(null);
+  const [token, setToken]         = useState<string | null>(getToken());
   const [isLoading, setIsLoading] = useState<boolean>(!!getToken());
 
-  // On mount: validate stored token
   useEffect(() => {
     const stored = getToken();
     if (!stored) { setIsLoading(false); return; }
@@ -61,8 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  function hasPermission(perm: string): boolean {
+    const perms = user?.permissions ?? [];
+    return perms.includes('*') || perms.includes(perm);
+  }
+
   return (
-    <Ctx.Provider value={{ user, token, isLoading, login, logout }}>
+    <Ctx.Provider value={{ user, token, isLoading, login, logout, hasPermission }}>
       {children}
     </Ctx.Provider>
   );

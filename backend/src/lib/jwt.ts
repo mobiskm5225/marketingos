@@ -5,6 +5,8 @@ const TTL_SECONDS = 7 * 24 * 3600; // 7 days
 
 export interface TokenPayload {
   username: string;
+  userId: string;
+  permissions: string[];
   exp: number;
 }
 

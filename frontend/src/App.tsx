@@ -1,25 +1,27 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { Settings, Search, HelpCircle, Bell } from 'lucide-react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Settings, Search, HelpCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { ToastProvider } from './lib/toast';
 import { AuthProvider, useAuth } from './lib/auth';
-import { api } from './lib/api';
+import NotificationPanel from './components/NotificationPanel';
 import Dashboard from './pages/Dashboard';
 import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
 import Trigger from './pages/Trigger';
 import Errors from './pages/Errors';
 import ActiveRuns from './pages/ActiveRuns';
+import Admin from './pages/Admin';
 import Login from './pages/Login';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
 
 // ─── Nav data ────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
-  { to: '/',        end: true,  label: 'Dashboard'     },
-  { to: '/trigger', end: false, label: 'Trigger Agent' },
+const ALL_NAV_ITEMS = [
+  { to: '/',        end: true,  label: 'Dashboard',     perm: null                },
+  { to: '/trigger', end: false, label: 'Trigger Agent', perm: '__canTrigger__'    },
+  { to: '/admin',   end: false, label: 'Admin',         perm: 'admin:users'       },
 ];
 
 const LIST_ITEMS = [
@@ -28,11 +30,11 @@ const LIST_ITEMS = [
   { to: '/errors',      label: 'Errors'      },
 ];
 
-// Permanent tabs — NO × button (can't be closed)
-const TAB_ROUTES = [
-  { to: '/',        label: 'Dashboard'     },
-  { to: '/jobs',    label: 'Jobs'          },
-  { to: '/trigger', label: 'Trigger Agent' },
+const ALL_TAB_ROUTES = [
+  { to: '/',        label: 'Dashboard',     perm: null             },
+  { to: '/jobs',    label: 'Jobs',          perm: null             },
+  { to: '/trigger', label: 'Trigger Agent', perm: '__canTrigger__' },
+  { to: '/admin',   label: 'Admin',         perm: 'admin:users'    },
 ];
 
 function SideNavItem({ to, label }: { to: string; label: string }) {
@@ -71,6 +73,14 @@ function Rail() {
 function AppNav({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const [filter, setFilter]   = useState('');
   const [navTab, setNavTab]   = useState<'all' | 'favorites'>('all');
+  const { hasPermission }     = useAuth();
+
+  const canTrigger = hasPermission('agents:trigger:seo-analyzer') || hasPermission('agents:trigger:blog-reviewer');
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter(item => {
+    if (item.perm === '__canTrigger__') return canTrigger;
+    if (item.perm) return hasPermission(item.perm);
+    return true;
+  });
 
   const match = (label: string) => !filter || label.toLowerCase().includes(filter.toLowerCase());
 
@@ -193,14 +203,6 @@ function Header({ onNavToggle }: { onNavToggle: () => void }) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
 
-  // Fetch stats for error badge — shares cache with Dashboard
-  const { data: stats } = useQuery({
-    queryKey: ['stats'],
-    queryFn: api.getStats,
-    refetchInterval: 30_000,
-  });
-  const errorCount = (stats as any)?.byStatus?.error ?? 0;
-
   function handleSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' && q.trim()) {
       navigate(`/jobs?q=${encodeURIComponent(q.trim())}`);
@@ -238,24 +240,7 @@ function Header({ onNavToggle }: { onNavToggle: () => void }) {
           <HelpCircle size={18} />
         </button>
 
-        {/* Bell with live error count badge */}
-        <button className="icon-btn" title={`${errorCount} error${errorCount !== 1 ? 's' : ''}`}
-          onClick={() => navigate('/jobs?status=error')}
-          style={{ position: 'relative' }}>
-          <Bell size={18} />
-          {errorCount > 0 && (
-            <span style={{
-              position: 'absolute', top: 3, right: 3,
-              width: 15, height: 15, borderRadius: '50%',
-              background: '#d32f2f', color: '#fff',
-              fontSize: 9, fontWeight: 800,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              lineHeight: 1,
-            }}>
-              {errorCount > 9 ? '9+' : errorCount}
-            </span>
-          )}
-        </button>
+        <NotificationPanel />
 
         <button className="icon-btn" title="Toggle Navigator" onClick={onNavToggle}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h16"/></svg>
@@ -272,8 +257,16 @@ function Header({ onNavToggle }: { onNavToggle: () => void }) {
 function WorkspaceTabs() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const isJobDetail = pathname.startsWith('/jobs/') && pathname !== '/jobs';
+  const { hasPermission } = useAuth();
+  const isJobDetail = pathname.startsWith('/jobs/') && pathname !== '/jobs' && pathname !== '/jobs/active';
   const jobId = isJobDetail ? pathname.split('/')[2] : null;
+
+  const canTrigger = hasPermission('agents:trigger:seo-analyzer') || hasPermission('agents:trigger:blog-reviewer');
+  const TAB_ROUTES = ALL_TAB_ROUTES.filter(item => {
+    if (item.perm === '__canTrigger__') return canTrigger;
+    if (item.perm) return hasPermission(item.perm);
+    return true;
+  });
 
   return (
     <div className="workspace-tabs">
@@ -322,6 +315,7 @@ function AppShell() {
             <Route path="/jobs/:id" element={<JobDetail />} />
             <Route path="/trigger" element={<Trigger />} />
             <Route path="/errors" element={<Errors />} />
+            <Route path="/admin" element={<Admin />} />
           </Routes>
         </main>
       </section>

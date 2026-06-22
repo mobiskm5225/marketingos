@@ -4,6 +4,7 @@ import { getPageProperties, retrievePage } from '../../core/notion/reader';
 import { createSubpage, updateStatus } from '../../core/notion/writer';
 import { callOpenAI } from '../../core/ai/openai';
 import { crawlUrl } from '../../core/crawler';
+import { createNotification } from '../../core/notifications';
 import { BLOG_REVIEW_SYSTEM_PROMPT } from './prompt';
 import { eq } from 'drizzle-orm';
 import log from '../../logger';
@@ -83,10 +84,19 @@ ${crawlResult.bodyText.slice(0, 12000)}
       content: result.text,
     });
 
+    const [job] = await db.select({ title: agentJobs.title }).from(agentJobs).where(eq(agentJobs.id, jobId));
+    await createNotification(
+      'job_done',
+      'Blog review complete',
+      `"${job?.title ?? 'Untitled'}" — $${result.costUsd.toFixed(4)}`,
+      jobId,
+    );
+
     log.info({ pageId, jobId, costUsd: result.costUsd.toFixed(6) }, 'Blog Reviewer done');
 
   } catch (err: any) {
     log.error({ pageId, jobId, err: err.message }, 'Blog Reviewer failed');
+    await createNotification('job_error', 'Blog review failed', err.message, jobId);
     try { await updateStatus(pageId, STATUS_PROP, 'Error'); } catch { /* swallow */ }
     try {
       await db.update(agentJobs).set({
@@ -146,10 +156,18 @@ ${crawlResult.bodyText.slice(0, 12000)}
       content: result.text,
     });
 
+    await createNotification(
+      'job_done',
+      'Blog review complete',
+      `"${title}" — $${result.costUsd.toFixed(4)}`,
+      jobId,
+    );
+
     log.info({ jobId, costUsd: result.costUsd.toFixed(6) }, 'Blog Reviewer direct done');
 
   } catch (err: any) {
     log.error({ jobId, err: err.message }, 'Blog Reviewer direct failed');
+    await createNotification('job_error', 'Blog review failed', err.message, jobId);
     try {
       await db.update(agentJobs).set({
         status: 'error',

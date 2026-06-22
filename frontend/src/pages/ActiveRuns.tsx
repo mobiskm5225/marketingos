@@ -6,7 +6,7 @@ import { api, type Job, type Stats } from '../lib/api';
 function agentLabel(name: string) {
   const map: Record<string, string> = {
     'seo-analyzer':  'SEO Analyzer',
-    'blog-reviewer': 'Blog Reviewer',
+    'blog-reviewer': 'Existing Blog Reviewer',
   };
   return map[name] ?? name;
 }
