@@ -29,14 +29,12 @@ export default function Jobs() {
   const [listSearch, setListSearch]   = useState(searchParams.get('q') ?? '');
   const [sortBy, setSortBy]       = useState<SortKey | null>(null);
   const [sortDir, setSortDir]     = useState<'asc' | 'desc'>('asc');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setAgentFilter(searchParams.get('agent') ?? '');
     setStatusFilter(searchParams.get('status') ?? '');
     setListSearch(searchParams.get('q') ?? '');
     setPage(0);
-    setSelectedIds(new Set());
   }, [searchParams.toString()]);
 
   const { data, isLoading } = useQuery({
@@ -84,16 +82,6 @@ export default function Jobs() {
     return sortDir === 'asc' ? '▲' : '▼';
   }
 
-  function toggleAll(e: React.ChangeEvent<HTMLInputElement>) {
-    setSelectedIds(e.target.checked ? new Set(jobs.map(j => j.id)) : new Set());
-  }
-
-  function toggleRow(id: string) {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setSelectedIds(next);
-  }
-
   function exportCSV() {
     const headers = ['ID', 'Agent', 'Title', 'Status', 'Tokens In', 'Tokens Out', 'Cost', 'Source', 'Created'];
     const rows = jobs.map(j => [
@@ -116,9 +104,7 @@ export default function Jobs() {
     URL.revokeObjectURL(url);
   }
 
-  const hasFilter  = agentFilter || statusFilter || listSearch;
-  const allChecked = jobs.length > 0 && jobs.every(j => selectedIds.has(j.id));
-  const nSelected  = selectedIds.size;
+  const hasFilter = agentFilter || statusFilter || listSearch;
 
   function thStyle(col: SortKey): React.CSSProperties {
     return { cursor: 'pointer', userSelect: 'none', background: sortBy === col ? '#e8ecf0' : undefined };
@@ -129,14 +115,6 @@ export default function Jobs() {
       <div className="crumb-row">
         <div className="breadcrumb"><span>Acefone MI</span><span>/</span><strong>Jobs</strong></div>
         <div className="record-actions">
-          <button className="sn-btn" disabled={nSelected === 0} title={nSelected === 0 ? 'Select rows first' : undefined}
-            onClick={() => alert(`Update ${nSelected} record(s) — coming soon`)}>
-            Update{nSelected > 0 ? ` (${nSelected})` : ''}
-          </button>
-          <button className="sn-btn" disabled={nSelected === 0} title={nSelected === 0 ? 'Select rows first' : undefined}
-            onClick={() => { if (confirm(`Delete ${nSelected} record(s)?`)) setSelectedIds(new Set()); }}>
-            Delete{nSelected > 0 ? ` (${nSelected})` : ''}
-          </button>
           <NavLink to="/trigger" className="sn-btn sn-btn-primary">+ New</NavLink>
         </div>
       </div>
@@ -159,11 +137,6 @@ export default function Jobs() {
             <span className="table-name">x_acf_mi_job</span>
             <span className="count">{jobs.length}{hasNext && !listSearch ? '+' : ''}</span>
           </div>
-          {nSelected > 0 && (
-            <span style={{ fontSize: 12, color: '#365ec9', fontWeight: 700, whiteSpace: 'nowrap' }}>
-              {nSelected} selected
-            </span>
-          )}
           {/* List search */}
           <div className="list-search">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.2-4.2"/></svg>
@@ -176,7 +149,7 @@ export default function Jobs() {
           {/* Agent filter */}
           <select className="sn-select" value={agentFilter}
             onChange={e => { setAgentFilter(e.target.value); setPage(0); }}
-            style={{ width: 200, minHeight: 30 }}>
+            style={{ width: 200 }}>
             <option value="">All Agents</option>
             <option value="seo-analyzer">SEO Analyzer</option>
             <option value="blog-reviewer">Existing Blog Reviewer</option>
@@ -184,7 +157,7 @@ export default function Jobs() {
           {/* Status filter */}
           <select className="sn-select" value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
-            style={{ width: 150, minHeight: 30 }}>
+            style={{ width: 150 }}>
             <option value="">All Statuses</option>
             <option value="done">Done</option>
             <option value="processing">Processing</option>
@@ -197,11 +170,6 @@ export default function Jobs() {
             </button>
           )}
           <div className="toolbar-spacer" />
-          <button className="toolbar-icon" onClick={() => alert('Advanced filter panel — coming soon')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.5V20l4 2v-9.5L22 3z"/></svg>
-            Filter
-          </button>
-          <button className="toolbar-icon" onClick={() => alert('Group by — coming soon')}>Group</button>
           <button className="toolbar-icon" onClick={exportCSV}>Export</button>
         </div>
         <div className="filter-strip">
@@ -220,9 +188,6 @@ export default function Jobs() {
             <table className="sn-table">
               <thead>
                 <tr>
-                  <th className="sel">
-                    <input type="checkbox" aria-label="Select all" checked={allChecked} onChange={toggleAll} />
-                  </th>
                   <th style={thStyle('id')} onClick={() => handleSort('id')}>
                     <span className="sort">Number</span>
                     <span style={{ fontSize: 10, marginLeft: 3, color: '#7b8a91' }}>{sortIcon('id')}</span>
@@ -256,11 +221,6 @@ export default function Jobs() {
                 {jobs.map(job => (
                   <tr key={job.id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/jobs/${job.id}`)}>
-                    <td className="sel" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" aria-label="Select row"
-                        checked={selectedIds.has(job.id)}
-                        onChange={() => toggleRow(job.id)} />
-                    </td>
                     <td onClick={e => e.stopPropagation()}>
                       <NavLink to={`/jobs/${job.id}`} className="record-link">{jobIdDisplay(job.id)}</NavLink>
                     </td>

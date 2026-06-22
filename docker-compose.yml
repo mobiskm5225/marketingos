@@ -9,6 +9,33 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - mi
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://acefone:acefone@postgres:5432/acefone
+    depends_on:
+      - postgres
+    networks:
+      - mi
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - mi
+
+networks:
+  mi:
+    driver: bridge
 
 volumes:
   pgdata:

@@ -1,20 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { apiPost } from '../lib/api';
 
 type AgentTab = 'seo' | 'blog';
-
-async function postAgent(endpoint: string, body: object): Promise<{ jobId: string }> {
-  const res = await fetch(`/api/agents/${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? 'Request failed');
-  }
-  return res.json();
-}
 
 function agentToTab(agentName?: string): AgentTab {
   if (agentName === 'blog-reviewer') return 'blog';
@@ -59,7 +47,7 @@ export default function Trigger() {
     setSeoError('');
     setSeoLoading(true);
     try {
-      const { jobId } = await postAgent('seo-analyzer', { title: seoTitle, content: seoContent, url: seoUrl || undefined });
+      const { jobId } = await apiPost<{ jobId: string }>('/agents/seo-analyzer', { title: seoTitle, content: seoContent, url: seoUrl || undefined });
       navigate(`/jobs/${jobId}`);
     } catch (err: unknown) {
       setSeoError(err instanceof Error ? err.message : 'Unknown error');
@@ -73,7 +61,7 @@ export default function Trigger() {
     setBlogError('');
     setBlogLoading(true);
     try {
-      const { jobId } = await postAgent('blog-reviewer', { title: blogTitle, url: blogUrl });
+      const { jobId } = await apiPost<{ jobId: string }>('/agents/blog-reviewer', { title: blogTitle, url: blogUrl });
       navigate(`/jobs/${jobId}`);
     } catch (err: unknown) {
       setBlogError(err instanceof Error ? err.message : 'Unknown error');
