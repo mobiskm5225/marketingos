@@ -139,7 +139,7 @@ export default function Jobs({ initialStatus = '' }: { initialStatus?: string })
   return (
     <>
       <div className="crumb-row">
-        <div className="breadcrumb"><span>Acefone MI</span><span>/</span><strong>Jobs</strong></div>
+        <div className="breadcrumb"><span>MI OS</span><span>/</span><strong>Jobs</strong></div>
         <div className="record-actions">
           <NavLink to="/trigger" className="sn-btn sn-btn-primary">+ New</NavLink>
         </div>

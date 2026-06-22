@@ -47,7 +47,7 @@ export default function Errors() {
     <>
       <div className="crumb-row">
         <div className="breadcrumb">
-          <span>Acefone MI</span><span>/</span><strong>Errors</strong>
+          <span>MI OS</span><span>/</span><strong>Errors</strong>
         </div>
         <div className="record-actions">
           <button className="sn-btn" onClick={() => refetch()}>Refresh</button>

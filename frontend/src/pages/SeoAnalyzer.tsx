@@ -68,7 +68,7 @@ export default function SeoAnalyzer() {
     <>
       <div className="crumb-row">
         <div className="breadcrumb">
-          <span>Acefone MI</span><span>/</span><strong>SEO Analyzer</strong>
+          <span>MI OS</span><span>/</span><strong>SEO Analyzer</strong>
         </div>
         <div className="record-actions">
           <NavLink to="/trigger" state={{ agent: 'seo-analyzer' }} className="sn-btn sn-btn-primary">

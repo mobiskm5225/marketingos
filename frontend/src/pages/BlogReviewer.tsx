@@ -68,7 +68,7 @@ export default function BlogReviewer() {
     <>
       <div className="crumb-row">
         <div className="breadcrumb">
-          <span>Acefone MI</span><span>/</span><strong>Existing Blog Reviewer</strong>
+          <span>MI OS</span><span>/</span><strong>Existing Blog Reviewer</strong>
         </div>
         <div className="record-actions">
           <NavLink to="/trigger" state={{ agent: 'blog-reviewer' }} className="sn-btn sn-btn-primary">

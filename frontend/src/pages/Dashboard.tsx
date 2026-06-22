@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { api, type Stats, type Job } from '../lib/api';
@@ -49,7 +49,7 @@ export default function Dashboard() {
   return (
     <>
       <div className="crumb-row">
-        <div className="breadcrumb"><span>Acefone MI</span><span>/</span><strong>Dashboard</strong></div>
+        <div className="breadcrumb"><span>MI OS</span><span>/</span><strong>Dashboard</strong></div>
         <div className="record-actions">
           <button className="sn-btn" onClick={handleRefresh} disabled={refreshing}>
             {refreshing ? <><span className="spinner" /> Refreshing...</> : 'Refresh'}
@@ -76,9 +76,9 @@ export default function Dashboard() {
               <div>
                 <div className="metric-head">
                   <div className="metric-label">Total Jobs</div>
-                  <div className="metric-icon">↗</div>
+                  <div className="metric-icon">â†—</div>
                 </div>
-                <div className="metric-value">{s?.totalJobs ?? '—'}</div>
+                <div className="metric-value">{s?.totalJobs ?? 'â€”'}</div>
               </div>
               <div className="metric-sub">All records</div>
             </div>
@@ -106,7 +106,7 @@ export default function Dashboard() {
               <div>
                 <div className="metric-head">
                   <div className="metric-label">Active Agents</div>
-                  <div className="metric-icon">✓</div>
+                  <div className="metric-icon">âœ“</div>
                 </div>
                 <div className="metric-value">{agentEntries.length}</div>
               </div>
@@ -127,7 +127,7 @@ export default function Dashboard() {
                 </span>
               )}
               <div className="toolbar-spacer" />
-              <NavLink to="/jobs" style={{ fontSize: 13, fontWeight: 700, color: 'var(--sn-link)' }}>View all →</NavLink>
+              <NavLink to="/jobs" style={{ fontSize: 13, fontWeight: 700, color: 'var(--sn-link)' }}>View all â†’</NavLink>
             </div>
             <div className="filter-strip">
               <span>Conditions:</span>
@@ -170,12 +170,12 @@ export default function Dashboard() {
                         <td>{agentLabel(job.agentName)}</td>
                         <td>
                           <NavLink to={`/jobs/${job.id}`} className="record-link" onClick={e => e.stopPropagation()}>
-                            {job.title || job.notionPageId || '—'}
+                            {job.title || job.notionPageId || 'â€”'}
                           </NavLink>
                         </td>
                         <td><span className={`status ${job.status}`}>{job.status}</span></td>
-                        <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : '—'}</td>
-                        <td><span className="tag">{job.source ?? '—'}</span></td>
+                        <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : 'â€”'}</td>
+                        <td><span className="tag">{job.source ?? 'â€”'}</span></td>
                         <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
                       </tr>
                     ))}
@@ -186,9 +186,9 @@ export default function Dashboard() {
             <div className="list-footer">
               <span>Rows 1 to {jobs.length} of {jobs.length}</span>
               <div className="pager">
-                <button disabled>‹</button>
+                <button disabled>â€¹</button>
                 <span>Page 1</span>
-                <button disabled>›</button>
+                <button disabled>â€º</button>
               </div>
             </div>
           </div>
@@ -229,7 +229,7 @@ export default function Dashboard() {
                     onClick={() => navigate(`/jobs?agent=${name}`)}>
                     <div>
                       <strong>{agentLabel(name)}</strong>
-                      <small>{data.jobs} jobs · Operational</small>
+                      <small>{data.jobs} jobs Â· Operational</small>
                     </div>
                     <span className="mono">${data.costUsd.toFixed(2)}</span>
                   </div>
@@ -242,15 +242,15 @@ export default function Dashboard() {
             <div className="mini-list">
               <NavLink to="/trigger" className="mini-item">
                 <div><strong>Trigger Agent</strong><small>Create a new job</small></div>
-                <span>›</span>
+                <span>â€º</span>
               </NavLink>
               <NavLink to="/jobs" className="mini-item">
                 <div><strong>All Jobs</strong><small>Open record list</small></div>
-                <span>›</span>
+                <span>â€º</span>
               </NavLink>
               <NavLink to="/jobs?status=error" className="mini-item">
                 <div><strong>View Errors</strong><small>Failed runs only</small></div>
-                <span>›</span>
+                <span>â€º</span>
               </NavLink>
             </div>
           </div>

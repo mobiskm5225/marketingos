@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useAuth } from '../lib/auth';
 
 export default function Login() {
@@ -41,7 +41,7 @@ export default function Login() {
             boxShadow: '0 0 0 1px rgba(255,255,255,.1)',
           }}>a</div>
           <div style={{ color: '#fff', fontWeight: 800, fontSize: 18, letterSpacing: '-.01em' }}>
-            Acefone MI
+            Marketing Intelligence OS
           </div>
           <div style={{ color: '#9dbbc4', fontSize: 13, marginTop: 4 }}>
             Marketing Intelligence Hub
@@ -110,7 +110,7 @@ export default function Login() {
           borderTop: '1px solid var(--sn-border)', padding: '12px 28px',
           background: '#fafbfc', fontSize: 12, color: '#697a82', textAlign: 'center',
         }}>
-          Acefone Intelligence · Internal tool · v2.0
+          Marketing Intelligence OS Â· Internal tool Â· v2.0
         </div>
       </div>
     </div>

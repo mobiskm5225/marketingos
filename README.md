@@ -1,4 +1,4 @@
-# Acefone Marketing Intelligence
+# Marketing Intelligence OS
 
 Internal AI agent platform for content operations — automates SEO analysis and blog review workflows via Notion, API, or web UI.
 
@@ -143,4 +143,4 @@ fix/*             — bug fixes
 
 ## License
 
-Internal tool — Acefone. Not for public distribution.
+Internal tool — Marketing Intelligence OS. Not for public distribution.

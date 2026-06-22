@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiPost } from '../lib/api';
 
@@ -73,7 +73,7 @@ export default function Trigger() {
   return (
     <>
       <div className="crumb-row">
-        <div className="breadcrumb"><span>Acefone MI</span><span>/</span><strong>Trigger Agent</strong></div>
+        <div className="breadcrumb"><span>MI OS</span><span>/</span><strong>Trigger Agent</strong></div>
         <div className="record-actions">
           <button className="sn-btn" type="button"
             onClick={() => { setSeoTitle(''); setSeoContent(''); setSeoUrl(''); setBlogTitle(''); setBlogUrl(''); }}>
@@ -88,12 +88,12 @@ export default function Trigger() {
         <div>
           <div className="title-kicker">Record producer</div>
           <h1 className="page-title">Trigger Agent</h1>
-          <p className="page-sub">Run directly from the workspace — no Notion webhook needed.</p>
+          <p className="page-sub">Run directly from the workspace â€” no Notion webhook needed.</p>
         </div>
         <div className="title-meta">
           <span className="tag"><span className="tag-dot" /> Direct API</span>
-          <span>~30–60s per run</span>
-          <span style={{ color: '#697a82', fontSize: 12 }}>Tip: ⌘+Enter to submit</span>
+          <span>~30â€“60s per run</span>
+          <span style={{ color: '#697a82', fontSize: 12 }}>Tip: âŒ˜+Enter to submit</span>
         </div>
       </div>
 
@@ -127,7 +127,7 @@ export default function Trigger() {
                     <input className="sn-input" type="url" value={seoUrl}
                       onChange={e => setSeoUrl(e.target.value)}
                       placeholder="https://acefone.com/blog/..." />
-                    <div className="help-text">Optional — used for canonical link analysis.</div>
+                    <div className="help-text">Optional â€” used for canonical link analysis.</div>
                   </div>
                   <div className="field-label">Blog content <span className="req">*</span></div>
                   <div className="field-control">
@@ -136,7 +136,7 @@ export default function Trigger() {
                       placeholder="Paste your draft markdown or plain text..." />
                     <div className="word-count">
                       <span className={warnWords ? 'warn' : ''}>{seoContent.length} characters</span>
-                      <span className={warnWords ? 'warn' : ''}>{wordCount} words{warnWords ? ' — minimum 300 recommended' : ''}</span>
+                      <span className={warnWords ? 'warn' : ''}>{wordCount} words{warnWords ? ' â€” minimum 300 recommended' : ''}</span>
                     </div>
                   </div>
                 </div>
@@ -153,7 +153,7 @@ export default function Trigger() {
             <>
               <div className="info-message">
                 <strong>Info</strong>
-                <span>Enter a live blog URL — the workspace will crawl the page and run a full post-publish audit.</span>
+                <span>Enter a live blog URL â€” the workspace will crawl the page and run a full post-publish audit.</span>
               </div>
               <form id="blog-form" onSubmit={handleBlogSubmit} onKeyDown={handleBlogKey}>
                 <div className="form-grid">
