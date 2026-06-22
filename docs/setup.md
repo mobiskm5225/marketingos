@@ -16,28 +16,39 @@ You also need:
 
 ---
 
-## 1. Clone / Navigate
+## 1. Clone & Checkout
 
 ```bash
-cd C:\Users\Testuser2\Desktop\acefone-intelligence
+git clone https://github.com/Moballigh5225/marketing-os.git acefone-intelligence
+cd acefone-intelligence
+git checkout release/0.5.0
 ```
+
+> **Important:** `main` is intentionally empty. All code lives on `release/0.5.0`.
+> For new features, branch off `release/0.5.0`:
+> ```bash
+> git checkout release/0.5.0
+> git checkout -b feature/your-feature
+> ```
 
 ---
 
 ## 2. Environment Variables
 
-Copy the example and fill in your keys:
-
 ```bash
-# In the backend folder
-copy backend\.env.example backend\.env
+cp .env.example backend/.env
 ```
 
-Open `backend\.env` and fill in:
+Open `backend/.env` and fill in:
 
 ```env
 # Server
 PORT=8000
+
+# Auth — required
+JWT_SECRET=change-this-to-a-long-random-string
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=changeme
 
 # Database (works as-is with Docker Compose defaults)
 DATABASE_URL=postgresql://acefone:acefone@localhost:5432/acefone
@@ -49,220 +60,170 @@ OPENAI_API_KEY=sk-...
 NOTION_API_KEY=secret_...
 NOTION_DATABASE_ID=<32-char-hex-id>         # SEO Reviews DB
 
-# Notion — Optional (enable specific flows)
+# Notion — Optional
 NOTION_WEBHOOK_SECRET=                       # Leave empty to skip HMAC check
 INGEST_SECRET=                               # Leave empty to skip /ingest auth
-BLOG_TRACKER_DATABASE_ID=                    # Blog Tracker DB (URL-trigger flow)
-BLOG_REVIEW_DB_ID=                           # Blog Reviews Queue DB (Existing Blog Reviewer)
+BLOG_TRACKER_DATABASE_ID=                    # Blog Tracker DB
+BLOG_REVIEW_DB_ID=                           # Blog Reviews Queue DB
 ```
 
 ### Finding Notion Database IDs
 
 1. Open the Notion database in browser
-2. Copy the URL: `https://notion.so/workspace/abcdef1234567890abcdef1234567890?v=...`
-3. The 32-character hex string is the database ID
-4. Paste it into `.env` (with or without hyphens — the backend normalizes both)
+2. URL: `https://notion.so/workspace/abcdef1234567890abcdef1234567890?v=...`
+3. 32-character hex string = database ID
+4. Paste into `.env` (with or without hyphens — backend normalizes both)
 
 ### Connecting the Notion Integration
 
-For each database the agents will read/write:
-1. Open the database in Notion
-2. Click `···` (top right) → **Connections** → **Add connections**
-3. Search for your integration name → Connect
+For each database the agents read/write:
+1. Open database in Notion → `···` (top right) → **Connections** → **Add connections**
+2. Search for your integration → Connect
 
-Without this step, the API will return `object_not_found` errors.
-
----
-
-## 3. Install Dependencies
-
-```bash
-# Backend
-cd backend
-npm install
-
-# Frontend (open a new terminal or go back to root)
-cd ../frontend
-npm install
-```
+Without this, the API returns `object_not_found`.
 
 ---
 
-## 4. Start PostgreSQL
+## Option A — Docker (recommended for collaboration)
+
+Run the full stack (Postgres + backend + frontend) in one command:
 
 ```bash
-# From root of acefone-intelligence/
-docker-compose up -d
+docker compose up --build
 ```
 
-Verify it's running:
+| URL | Service |
+|---|---|
+| `http://localhost:3000` | React frontend |
+| `http://localhost:8000` | Express backend |
+| `localhost:5432` | PostgreSQL |
+
+**First run only — run migrations:**
 ```bash
-docker ps
-# Should show: postgres:16-alpine, port 5432
+docker compose exec backend npm run db:migrate
 ```
 
-The database `acefone` is created automatically. Default credentials: `acefone / acefone`.
+**Stop:**
+```bash
+docker compose down          # keep data
+docker compose down -v       # wipe data too
+```
+
+> In Docker, nginx handles `/api` and `/auth` proxying — Vite is not used. No extra config needed.
 
 ---
 
-## 5. Run Database Migrations
+## Option B — Local Dev (hot reload)
+
+### 3. Install Dependencies
 
 ```bash
-cd backend
-npm run db:migrate
+cd backend && npm install
+cd ../frontend && npm install
 ```
 
-This creates the three tables: `agent_jobs`, `agent_results`, `kb_cache`.
-
-If the command fails, check that Docker is running and `DATABASE_URL` matches your `docker-compose.yml` values.
-
----
-
-## 6. Start the Backend
+### 4. Start PostgreSQL
 
 ```bash
-cd backend
-npm run dev
+# From repo root
+docker compose up -d postgres
 ```
 
-Expected output:
-```
-Server running on port 8000
-```
-
-The backend uses `tsx watch` — it automatically restarts on file changes.
-
-**Verify:**
-```bash
-curl http://localhost:8000/health
-# → {"status":"ok"}
-```
-
----
-
-## 7. Start the Frontend
-
-Open a new terminal:
+### 5. Run Migrations
 
 ```bash
-cd frontend
-npm run dev
+cd backend && npm run db:migrate
 ```
 
-Expected output:
-```
-  VITE v8.x  ready in Xms
+### 6. Start Backend
 
-  ➜  Local:   http://localhost:3000/
-  ➜  Network: http://192.168.x.x:3000/
+```bash
+cd backend && npm run dev
 ```
 
-Open `http://localhost:3000` in your browser. You should see the Acefone MI dashboard.
+Expected: `Server running on port 8000`
+
+Verify: `curl http://localhost:8000/health` → `{"status":"ok"}`
+
+### 7. Start Frontend
+
+```bash
+cd frontend && npm run dev
+```
+
+Open `http://localhost:3000` — login page appears.
+
+Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
 
 ---
 
 ## 8. Test an Agent Run
 
-### Option A: Web UI (easiest)
+### Web UI
 
-1. Go to `http://localhost:3000/trigger`
-2. Select **SEO Analyzer** tab
-3. Enter a blog title and paste some content (300+ words recommended)
-4. Click **Run SEO Analysis**
-5. You're redirected to the job detail page — it auto-refreshes every 3s until done
+1. Login at `http://localhost:3000`
+2. Go to **Trigger Agent**
+3. Select **SEO Analyzer**, enter title + content (300+ words)
+4. Click **Run SEO Analysis** → redirected to job detail, auto-refreshes until done
 
-### Option B: cURL
+### cURL
 
+All `/api/*` routes require a JWT. Get a token first:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"changeme"}' | \
+  grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+```
+
+Trigger agent:
 ```bash
 curl -X POST http://localhost:8000/api/agents/seo-analyzer \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "What is Cloud Telephony?",
-    "content": "Cloud telephony is a technology that moves your business phone system to the cloud..."
-  }'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"title":"Cloud Telephony Guide","content":"..."}'
 ```
 
-Response:
-```json
-{"jobId":"550e8400-...","status":"accepted"}
-```
-
-Check the job:
+Check job:
 ```bash
-curl http://localhost:8000/api/jobs/550e8400-...
+curl http://localhost:8000/api/jobs/<jobId> \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
 ## 9. Set Up Notion Webhook (optional)
 
-If you want Notion pages to trigger agents automatically (without using the web UI):
-
-### Install ngrok
+For Notion pages to trigger agents automatically:
 
 ```bash
-# Windows (winget)
+# Install ngrok (Windows)
 winget install ngrok
 
-# Or download from https://ngrok.com/download
-```
-
-### Start tunnel
-
-```bash
+# Start tunnel
 ngrok http 8000
 ```
 
-Copy the HTTPS URL: `https://xxxx-xxxx.ngrok-free.app`
+Copy the HTTPS URL: `https://xxxx.ngrok-free.app`
 
-### Register webhook in Notion
-
-1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations)
-2. Select your integration
-3. Go to **Webhooks** tab
-4. Add webhook URL: `https://xxxx-xxxx.ngrok-free.app/webhook`
-5. Select events: `page.created`, `page.updated`, `page.properties_updated`
-6. Copy the **Signing Secret** → paste into `NOTION_WEBHOOK_SECRET` in `.env`
-7. Restart the backend
-
-### Test the webhook
-
-1. Open your `NOTION_DATABASE_ID` database in Notion
-2. Create a new page
-3. Set `SEO Status` = `Pending`
-4. Watch the backend logs — the SEO Analyzer should trigger
-
----
-
-## Running Everything at Once
-
-Use three terminals:
-
-```
-Terminal 1 (DB):       docker-compose up
-Terminal 2 (Backend):  cd backend && npm run dev
-Terminal 3 (Frontend): cd frontend && npm run dev
-```
-
-Or with npm workspaces / concurrently (if configured):
-```bash
-# From root
-npm run dev  # if configured in root package.json
-```
+In Notion → your integration → **Webhooks**:
+- URL: `https://xxxx.ngrok-free.app/webhook`
+- Events: `page.created`, `page.updated`, `page.properties_updated`
+- Copy signing secret → `NOTION_WEBHOOK_SECRET` in `.env` → restart backend
 
 ---
 
 ## Stopping Everything
 
 ```bash
-# Stop frontend: Ctrl+C in its terminal
-# Stop backend:  Ctrl+C in its terminal
+# Local dev: Ctrl+C in each terminal, then:
+docker compose stop       # stop postgres (keeps data)
+docker compose down -v    # stop + wipe data
 
-# Stop PostgreSQL (keeps data)
-docker-compose stop
-
-# Stop PostgreSQL AND delete data
-docker-compose down -v
+# Docker full stack:
+docker compose down       # keep data
+docker compose down -v    # wipe data
 ```
 
 ---
@@ -270,9 +231,8 @@ docker-compose down -v
 ## Resetting the Database
 
 ```bash
-# Wipe all data and restart fresh
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d postgres       # or: docker compose up -d
 cd backend && npm run db:migrate
 ```
 
@@ -280,51 +240,62 @@ cd backend && npm run db:migrate
 
 ## Troubleshooting
 
+### `username and password are required` on login
+
+Backend not restarted after adding `ADMIN_USERNAME`/`ADMIN_PASSWORD` to `.env`. Restart backend.
+
+### `401 Unauthorized` on `/api/*`
+
+Token missing or expired. Log out and log back in — fresh 7-day token issued on login.
+
+### `404` on `/auth/login` (local dev only)
+
+Vite proxy must include `/auth`. Check `frontend/vite.config.ts`:
+```ts
+proxy: {
+  '/api':  'http://localhost:8000',
+  '/auth': 'http://localhost:8000',
+}
+```
+Restart Vite after any proxy change.
+
 ### `ECONNREFUSED` connecting to PostgreSQL
 
-- Check Docker is running: `docker ps`
-- Check port 5432 is not in use by another Postgres instance
-- Verify `DATABASE_URL` in `.env`
+- `docker ps` — confirm postgres container running
+- Port 5432 not in use by another instance
+- `DATABASE_URL` in `.env` matches `docker-compose.yml` values
 
 ### `object_not_found` from Notion API
 
-- Notion Integration is not connected to the database
-- Go to the database → `···` → **Connections** → add your integration
+Integration not connected to the database. Database → `···` → **Connections** → add integration.
 
 ### `401 Unauthorized` on webhook
 
-- `NOTION_WEBHOOK_SECRET` in `.env` doesn't match the signing secret in Notion
-- Or leave `NOTION_WEBHOOK_SECRET` empty to disable verification
-
-### Frontend shows blank page or API errors
-
-- Confirm backend is running on port 8000: `curl http://localhost:8000/health`
-- Check Vite proxy config in `frontend/vite.config.ts`
-
-### OpenAI `429 Too Many Requests`
-
-- You've hit the GPT-4o rate limit on your account tier
-- Wait and retry, or upgrade your OpenAI usage tier
+`NOTION_WEBHOOK_SECRET` mismatch. Leave it empty to disable HMAC check for local dev.
 
 ### Agent stuck in `processing`
 
-Check backend logs for errors. Manually reset in PostgreSQL:
-
+Manually reset in PostgreSQL:
 ```sql
 UPDATE agent_jobs
-SET status = 'error', error_message = 'Manually reset — was stuck'
+SET status = 'error', error_message = 'Manually reset'
 WHERE status = 'processing'
   AND updated_at < now() - interval '10 minutes';
 ```
 
+### OpenAI `429 Too Many Requests`
+
+GPT-4o rate limit hit. Wait and retry, or upgrade OpenAI usage tier.
+
 ---
 
-## Environment Summary
+## Git Workflow
 
-| URL | Service |
-|---|---|
-| `http://localhost:3000` | React frontend |
-| `http://localhost:8000` | Express backend |
-| `http://localhost:8000/health` | Backend health check |
-| `http://localhost:8000/api/jobs` | Jobs API |
-| `localhost:5432` | PostgreSQL |
+```
+main              — empty, do not use
+release/0.5.0     — stable, all development branches from here
+feature/*         — new features
+fix/*             — bug fixes
+```
+
+Always branch from `release/0.5.0`, never from `main`.
