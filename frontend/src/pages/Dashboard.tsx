@@ -1,16 +1,34 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { api, type Stats, type Job } from '../lib/api';
+import FilterBar, { type FilterCondition, type ColumnDef } from '../components/FilterBar';
+import { applyFilters } from '../lib/filterUtils';
+
+const AGENT_OPTIONS = [
+  { value: 'seo-analyzer',  label: 'SEO Analyzer' },
+  { value: 'blog-reviewer', label: 'Existing Blog Reviewer' },
+];
+const STATUS_OPTIONS = [
+  { value: 'done',       label: 'Done'       },
+  { value: 'processing', label: 'Processing' },
+  { value: 'pending',    label: 'Pending'    },
+  { value: 'error',      label: 'Error'      },
+];
+
+const COLUMNS: ColumnDef[] = [
+  { key: 'id',        label: 'Number',           type: 'text' },
+  { key: 'agentName', label: 'Agent',             type: 'select', options: AGENT_OPTIONS },
+  { key: 'title',     label: 'Short description', type: 'text' },
+  { key: 'status',    label: 'Status',            type: 'select', options: STATUS_OPTIONS },
+  { key: 'costUsd',   label: 'Cost ($)',           type: 'number' },
+  { key: 'source',    label: 'Source',            type: 'text' },
+  { key: 'createdAt', label: 'Created',           type: 'date' },
+];
 
 function agentLabel(name: string) {
-  const map: Record<string, string> = {
-    'seo-analyzer':  'SEO Analyzer',
-    'blog-reviewer': 'Existing Blog Reviewer',
-  };
-  return map[name] ?? name;
+  return AGENT_OPTIONS.find(o => o.value === name)?.label ?? name;
 }
-
 function jobIdDisplay(id: string) {
   return id.replace('job-', 'J-').toUpperCase();
 }
@@ -18,14 +36,24 @@ function jobIdDisplay(id: string) {
 export default function Dashboard() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
+  const [filters, setFilters] = useState<FilterCondition[]>([]);
 
-  const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.getStats, refetchInterval: 30_000 });
-  const { data: jobsRes, isLoading: jl } = useQuery({ queryKey: ['jobs', 'recent'], queryFn: () => api.getJobs({ limit: 5 }), refetchInterval: 15_000 });
+  const { data: stats } = useQuery({
+    queryKey: ['stats'],
+    queryFn: api.getStats,
+    refetchInterval: 30_000,
+  });
+
+  const { data: jobsRes, isLoading: jl } = useQuery({
+    queryKey: ['jobs', 'recent'],
+    queryFn: () => api.getJobs({ limit: 20 }),
+    refetchInterval: 15_000,
+  });
 
   const s = stats as Stats | undefined;
-  const jobs = (jobsRes?.jobs ?? []) as Job[];
+  const rawJobs = (jobsRes?.jobs ?? []) as Job[];
+  const jobs = applyFilters(rawJobs as unknown as Record<string, unknown>[], filters, COLUMNS) as unknown as Job[];
   const agentEntries = Object.entries(s?.byAgent ?? {});
 
   async function handleRefresh() {
@@ -33,18 +61,6 @@ export default function Dashboard() {
     await qc.invalidateQueries();
     setTimeout(() => setRefreshing(false), 800);
   }
-
-  function toggleAll(e: React.ChangeEvent<HTMLInputElement>) {
-    setSelectedIds(e.target.checked ? new Set(jobs.map(j => j.id)) : new Set());
-  }
-
-  function toggleRow(id: string, e: React.ChangeEvent<HTMLInputElement>) {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setSelectedIds(next);
-  }
-
-  const allChecked = jobs.length > 0 && jobs.every(j => selectedIds.has(j.id));
 
   return (
     <>
@@ -57,6 +73,7 @@ export default function Dashboard() {
           <NavLink to="/trigger" className="sn-btn sn-btn-primary">+ Trigger Agent</NavLink>
         </div>
       </div>
+
       <div className="page-titlebar">
         <div>
           <div className="title-kicker">Workspace overview</div>
@@ -76,9 +93,9 @@ export default function Dashboard() {
               <div>
                 <div className="metric-head">
                   <div className="metric-label">Total Jobs</div>
-                  <div className="metric-icon">â†—</div>
+                  <div className="metric-icon">↗</div>
                 </div>
-                <div className="metric-value">{s?.totalJobs ?? 'â€”'}</div>
+                <div className="metric-value">{s?.totalJobs ?? '—'}</div>
               </div>
               <div className="metric-sub">All records</div>
             </div>
@@ -92,7 +109,7 @@ export default function Dashboard() {
               </div>
               <div className="metric-sub">Total ${(s?.totalCostUsd ?? 0).toFixed(4)}</div>
             </div>
-            <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs?status=error')}>
+            <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/errors')}>
               <div>
                 <div className="metric-head">
                   <div className="metric-label">Error Rate</div>
@@ -106,7 +123,7 @@ export default function Dashboard() {
               <div>
                 <div className="metric-head">
                   <div className="metric-label">Active Agents</div>
-                  <div className="metric-icon">âœ“</div>
+                  <div className="metric-icon">✓</div>
                 </div>
                 <div className="metric-value">{agentEntries.length}</div>
               </div>
@@ -121,32 +138,21 @@ export default function Dashboard() {
                 <span className="table-name">x_acf_mi_job</span>
                 <span className="count">{jobs.length}</span>
               </div>
-              {selectedIds.size > 0 && (
-                <span style={{ fontSize: 12, color: '#365ec9', fontWeight: 700 }}>
-                  {selectedIds.size} selected
-                </span>
-              )}
               <div className="toolbar-spacer" />
-              <NavLink to="/jobs" style={{ fontSize: 13, fontWeight: 700, color: 'var(--sn-link)' }}>View all â†’</NavLink>
+              <NavLink to="/jobs" style={{ fontSize: 13, fontWeight: 700, color: 'var(--sn-link)' }}>View all →</NavLink>
             </div>
-            <div className="filter-strip">
-              <span>Conditions:</span>
-              <span className="condition"><strong>Created</strong> on Today</span>
-              <span className="condition"><strong>Order</strong> by Created desc</span>
-            </div>
+
+            <FilterBar columns={COLUMNS} value={filters} onChange={setFilters} />
+
             <div className="table-wrap">
               {jl ? (
                 <div className="empty">Loading...</div>
               ) : jobs.length === 0 ? (
-                <div className="empty">No jobs yet.</div>
+                <div className="empty">No jobs match the current filter.</div>
               ) : (
                 <table className="sn-table">
                   <thead>
                     <tr>
-                      <th className="sel">
-                        <input type="checkbox" aria-label="Select all"
-                          checked={allChecked} onChange={toggleAll} />
-                      </th>
                       <th><span className="sort">Number</span></th>
                       <th>Agent</th>
                       <th>Short description</th>
@@ -158,24 +164,20 @@ export default function Dashboard() {
                   </thead>
                   <tbody>
                     {jobs.map(job => (
-                      <tr key={job.id}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => navigate(`/jobs/${job.id}`)}>
-                        <td className="sel" onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" aria-label="Select row"
-                            checked={selectedIds.has(job.id)}
-                            onChange={e => toggleRow(job.id, e)} />
+                      <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/jobs/${job.id}`)}>
+                        <td onClick={e => e.stopPropagation()}>
+                          <NavLink to={`/jobs/${job.id}`} className="record-link">{jobIdDisplay(job.id)}</NavLink>
                         </td>
-                        <td><NavLink to={`/jobs/${job.id}`} className="record-link" onClick={e => e.stopPropagation()}>{jobIdDisplay(job.id)}</NavLink></td>
                         <td>{agentLabel(job.agentName)}</td>
-                        <td>
-                          <NavLink to={`/jobs/${job.id}`} className="record-link" onClick={e => e.stopPropagation()}>
-                            {job.title || job.notionPageId || 'â€”'}
+                        <td style={{ maxWidth: 260 }} onClick={e => e.stopPropagation()}>
+                          <NavLink to={`/jobs/${job.id}`} className="record-link"
+                            style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {job.title || job.notionPageId || '—'}
                           </NavLink>
                         </td>
                         <td><span className={`status ${job.status}`}>{job.status}</span></td>
-                        <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : 'â€”'}</td>
-                        <td><span className="tag">{job.source ?? 'â€”'}</span></td>
+                        <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : '—'}</td>
+                        <td><span className="tag">{job.source ?? '—'}</span></td>
                         <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
                       </tr>
                     ))}
@@ -184,12 +186,7 @@ export default function Dashboard() {
               )}
             </div>
             <div className="list-footer">
-              <span>Rows 1 to {jobs.length} of {jobs.length}</span>
-              <div className="pager">
-                <button disabled>â€¹</button>
-                <span>Page 1</span>
-                <button disabled>â€º</button>
-              </div>
+              <span>Showing {jobs.length} of {rawJobs.length} recent records</span>
             </div>
           </div>
         </div>
@@ -201,20 +198,23 @@ export default function Dashboard() {
           <div className="side-section">
             <div className="side-label">System health</div>
             <div className="kv"><span>Queue status</span><span>Normal</span></div>
-            <div className="kv"><span>Open errors</span>
-              <span style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs?status=error')}>
+            <div className="kv">
+              <span>Open errors</span>
+              <span style={{ cursor: 'pointer' }} onClick={() => navigate('/errors')}>
                 <span style={{ color: (s?.byStatus?.['error'] ?? 0) > 0 ? 'var(--sn-red)' : 'inherit', fontWeight: 700 }}>
                   {s?.byStatus?.['error'] ?? 0}
                 </span>
               </span>
             </div>
-            <div className="kv"><span>Processing</span>
-              <span style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs?status=processing')}>
+            <div className="kv">
+              <span>Processing</span>
+              <span style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs/active')}>
                 {s?.byStatus?.['processing'] ?? 0}
               </span>
             </div>
-            <div className="kv"><span>Pending</span>
-              <span style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs?status=pending')}>
+            <div className="kv">
+              <span>Pending</span>
+              <span style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs/active')}>
                 {s?.byStatus?.['pending'] ?? 0}
               </span>
             </div>
@@ -224,12 +224,11 @@ export default function Dashboard() {
               <div className="side-label">Agent breakdown</div>
               <div className="mini-list">
                 {agentEntries.map(([name, data]) => (
-                  <div key={name} className="mini-item"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/jobs?agent=${name}`)}>
+                  <div key={name} className="mini-item" style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/jobs`)}>
                     <div>
                       <strong>{agentLabel(name)}</strong>
-                      <small>{data.jobs} jobs Â· Operational</small>
+                      <small>{data.jobs} jobs · Operational</small>
                     </div>
                     <span className="mono">${data.costUsd.toFixed(2)}</span>
                   </div>
@@ -242,15 +241,19 @@ export default function Dashboard() {
             <div className="mini-list">
               <NavLink to="/trigger" className="mini-item">
                 <div><strong>Trigger Agent</strong><small>Create a new job</small></div>
-                <span>â€º</span>
+                <span>›</span>
               </NavLink>
               <NavLink to="/jobs" className="mini-item">
                 <div><strong>All Jobs</strong><small>Open record list</small></div>
-                <span>â€º</span>
+                <span>›</span>
               </NavLink>
-              <NavLink to="/jobs?status=error" className="mini-item">
+              <NavLink to="/errors" className="mini-item">
                 <div><strong>View Errors</strong><small>Failed runs only</small></div>
-                <span>â€º</span>
+                <span>›</span>
+              </NavLink>
+              <NavLink to="/jobs/active" className="mini-item">
+                <div><strong>Active Runs</strong><small>Live monitor</small></div>
+                <span>›</span>
               </NavLink>
             </div>
           </div>
