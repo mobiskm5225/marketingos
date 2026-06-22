@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Settings, Search, HelpCircle, Bell } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
 import Trigger from './pages/Trigger';
+import Errors from './pages/Errors';
+import ActiveRuns from './pages/ActiveRuns';
 import Login from './pages/Login';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
@@ -17,17 +19,13 @@ const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } 
 
 const NAV_ITEMS = [
   { to: '/',        end: true,  label: 'Dashboard'     },
-  { to: '/jobs',    end: false, label: 'Agent Jobs'    },
   { to: '/trigger', end: false, label: 'Trigger Agent' },
 ];
 
-// LIST_ITEMS include query strings — must use exact pathname+search matching
 const LIST_ITEMS = [
-  { to: '/jobs',                     label: 'All Jobs'               },
-  { to: '/jobs?status=processing',   label: 'Active Runs'            },
-  { to: '/jobs?status=error',        label: 'Errors'                 },
-  { to: '/jobs?agent=seo-analyzer',  label: 'SEO Analyzer'           },
-  { to: '/jobs?agent=blog-reviewer', label: 'Existing Blog Reviewer' },
+  { to: '/jobs',        label: 'All Jobs'    },
+  { to: '/jobs/active', label: 'Active Runs' },
+  { to: '/errors',      label: 'Errors'      },
 ];
 
 // Permanent tabs — NO × button (can't be closed)
@@ -37,18 +35,11 @@ const TAB_ROUTES = [
   { to: '/trigger', label: 'Trigger Agent' },
 ];
 
-// ─── SideNavItem: exact pathname+search matching for query-string links ───────
-// NavLink with string className still auto-appends "active" based on pathname only
-// (ignores search params), so all /jobs?* items light up together. Use Link instead.
 function SideNavItem({ to, label }: { to: string; label: string }) {
-  const location = useLocation();
-  const [path, qs] = to.split('?');
-  const targetSearch = qs ? `?${qs}` : '';
-  const isActive = location.pathname === path && location.search === targetSearch;
   return (
-    <Link to={to} className={`app-link${isActive ? ' active' : ''}`}>
+    <NavLink to={to} end className={({ isActive }) => `app-link${isActive ? ' active' : ''}`}>
       {label}
-    </Link>
+    </NavLink>
   );
 }
 
@@ -60,17 +51,17 @@ function Rail() {
       <button className="rail-btn active" title="Main">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
-      <button className="rail-btn" title="Favorites">
+      <button className="rail-btn" title="Favorites — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.1 8.3 22 9.3 17 14.2 18.2 21 12 17.8 5.8 21 7 14.2 2 9.3 8.9 8.3 12 2"/></svg>
       </button>
-      <button className="rail-btn" title="History">
+      <button className="rail-btn" title="History — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>
       </button>
-      <button className="rail-btn" title="Workspaces">
+      <button className="rail-btn" title="Workspaces — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       </button>
       <div className="rail-spacer" />
-      <button className="rail-btn" title="Settings"><Settings size={18} /></button>
+      <button className="rail-btn" title="Settings — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}><Settings size={18} /></button>
       <div className="rail-avatar">MI</div>
     </aside>
   );
@@ -107,7 +98,7 @@ function AppNav({ open, onToggle }: { open: boolean; onToggle: () => void }) {
         </div>
         <div className="nav-tabs">
           <button className={`nav-tab${navTab === 'all' ? ' active' : ''}`} onClick={() => setNavTab('all')}>All</button>
-          <button className={`nav-tab${navTab === 'favorites' ? ' active' : ''}`} onClick={() => setNavTab('favorites')}>Favorites</button>
+          <button className="nav-tab" title="Favorites — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>Favorites</button>
         </div>
       </div>
 
@@ -327,8 +318,10 @@ function AppShell() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/jobs" element={<Jobs />} />
+            <Route path="/jobs/active" element={<ActiveRuns />} />
             <Route path="/jobs/:id" element={<JobDetail />} />
             <Route path="/trigger" element={<Trigger />} />
+            <Route path="/errors" element={<Errors />} />
           </Routes>
         </main>
       </section>

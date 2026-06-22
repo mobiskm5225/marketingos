@@ -340,7 +340,7 @@ a.mini-item:hover { background: #e9edf0; }
 .filter-strip {
   display: flex; align-items: center; gap: 8px; min-height: 38px;
   padding: 6px 10px; border-bottom: 1px solid var(--sn-border);
-  background: #f8fafb; color: #41545c; font-size: 13px;
+  background: #f8fafb; color: #41545c; font-size: 13px; flex-wrap: wrap;
 }
 .condition {
   display: inline-flex; align-items: center; gap: 6px; background: #fff;
@@ -348,6 +348,37 @@ a.mini-item:hover { background: #e9edf0; }
   padding: 4px 9px; font-size: 12px; color: #34474f;
 }
 .condition strong { color: #142831; }
+
+/* Filter bar — chip, editor, buttons */
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #fff; border: 1px solid var(--sn-border-dark);
+  border-radius: 999px; padding: 4px 6px 4px 10px;
+  font-size: 12px; color: #2c3f47; cursor: pointer; white-space: nowrap;
+}
+.filter-chip:hover { background: #edf1f3; }
+.chip-remove {
+  width: 18px; height: 18px; border-radius: 50%; border: 0; background: transparent;
+  display: grid; place-items: center; color: #60727b; font-size: 14px; cursor: pointer;
+  flex-shrink: 0; line-height: 1; padding: 0;
+}
+.chip-remove:hover { background: var(--sn-border-dark); color: #1f2d33; }
+.add-filter-btn {
+  height: 26px; border: 1px dashed var(--sn-border-dark); border-radius: 999px;
+  padding: 0 10px; background: transparent; color: #44565e;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.add-filter-btn:hover { background: #eef2f4; border-style: solid; }
+.clear-filter-btn {
+  height: 26px; border: 0; background: transparent;
+  padding: 0 6px; color: #697a82; font-size: 12px; cursor: pointer; font-weight: 700;
+}
+.clear-filter-btn:hover { color: var(--sn-red); }
+.filter-editor {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 8px 10px; background: #eef2f5;
+  border-bottom: 1px solid var(--sn-border);
+}
 
 /* Table */
 .table-wrap { width: 100%; overflow-x: auto; background: #fff; }

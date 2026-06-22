@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "node --watch --require tsx/cjs src/index.ts",
+    "start": "node --require tsx/cjs src/index.ts",
     "build": "tsc",
-    "backfill": "tsx scripts/backfill.ts",
-    "db:migrate": "tsx scripts/migrate.ts"
+    "backfill": "node --require tsx/cjs scripts/backfill.ts",
+    "db:migrate": "node --require tsx/cjs scripts/migrate.ts"
   },
   "keywords": [],
   "author": "",
