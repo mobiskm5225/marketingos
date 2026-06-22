@@ -110,7 +110,7 @@ export default function Login() {
           borderTop: '1px solid var(--sn-border)', padding: '12px 28px',
           background: '#fafbfc', fontSize: 12, color: '#697a82', textAlign: 'center',
         }}>
-          Marketing Intelligence OS Â· Internal tool Â· v2.0
+          Marketing Intelligence OS &middot; Internal tool &middot; v2.0
         </div>
       </div>
     </div>
