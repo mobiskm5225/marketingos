@@ -5,15 +5,20 @@ export function verifyNotionSignature(rawBody: Buffer, header: string): boolean 
   const secret = process.env.NOTION_WEBHOOK_SECRET;
   if (!secret) return true;
 
-  let sig = header;
-  if (header.includes(',')) sig = header.split(',')[1];
+  // Notion sends: "v1=<hex>" — extract hex part after "="
+  const parts = header.split('=');
+  const sig = parts.length >= 2 ? parts.slice(1).join('=') : header;
 
   const expected = crypto
     .createHmac('sha256', secret)
     .update(rawBody)
     .digest('hex');
 
-  return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(sig, 'hex'));
+  const eBuf = Buffer.from(expected, 'hex');
+  const sBuf = Buffer.from(sig, 'hex');
+  if (eBuf.length !== sBuf.length) return false;
+
+  return crypto.timingSafeEqual(eBuf, sBuf);
 }
 
 export function ingestAuth(req: Request, res: Response, next: NextFunction): void {
