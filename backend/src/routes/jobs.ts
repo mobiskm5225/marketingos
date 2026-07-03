@@ -1,45 +1,46 @@
 import { Router } from 'express';
 import { db } from '../core/db';
 import { agentJobs, agentResults } from '../core/db/schema';
-import { eq, desc, sql, count, sum } from 'drizzle-orm';
+import { eq, desc, sql, count, sum, and, ilike } from 'drizzle-orm';
 
 const router = Router();
 
 router.get('/jobs', async (req, res) => {
   try {
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const offset = Number(req.query.offset) || 0;
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || '50'), 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
     const agentFilter = req.query.agent as string | undefined;
     const statusFilter = req.query.status as string | undefined;
+    const q = req.query.q as string | undefined;
 
-    let query = db
-      .select({
-        id: agentJobs.id,
-        agentName: agentJobs.agentName,
-        notionPageId: agentJobs.notionPageId,
-        title: agentJobs.title,
-        status: agentJobs.status,
-        inputTokens: agentJobs.inputTokens,
-        outputTokens: agentJobs.outputTokens,
-        costUsd: agentJobs.costUsd,
-        errorMessage: agentJobs.errorMessage,
-        source: agentJobs.source,
-        createdAt: agentJobs.createdAt,
-        updatedAt: agentJobs.updatedAt,
-      })
-      .from(agentJobs)
-      .orderBy(desc(agentJobs.createdAt))
-      .limit(limit)
-      .offset(offset) as any;
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (agentFilter) conditions.push(eq(agentJobs.agentName, agentFilter));
+    if (statusFilter) conditions.push(eq(agentJobs.status, statusFilter as any));
+    if (q)           conditions.push(ilike(agentJobs.title, `%${q}%`) as any);
 
-    const jobs = await query;
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // Apply filters in JS (simpler than dynamic where clauses)
-    let filtered = jobs;
-    if (agentFilter) filtered = filtered.filter((j: any) => j.agentName === agentFilter);
-    if (statusFilter) filtered = filtered.filter((j: any) => j.status === statusFilter);
+    const selectFields = {
+      id: agentJobs.id,
+      agentName: agentJobs.agentName,
+      notionPageId: agentJobs.notionPageId,
+      title: agentJobs.title,
+      status: agentJobs.status,
+      inputTokens: agentJobs.inputTokens,
+      outputTokens: agentJobs.outputTokens,
+      costUsd: agentJobs.costUsd,
+      errorMessage: agentJobs.errorMessage,
+      source: agentJobs.source,
+      createdAt: agentJobs.createdAt,
+      updatedAt: agentJobs.updatedAt,
+    };
 
-    res.json({ jobs: filtered, limit, offset });
+    const [jobs, [totals]] = await Promise.all([
+      db.select(selectFields).from(agentJobs).where(where).orderBy(desc(agentJobs.createdAt)).limit(limit).offset(offset),
+      db.select({ total: count(agentJobs.id) }).from(agentJobs).where(where),
+    ]);
+
+    res.json({ jobs, limit, offset, total: Number(totals.total) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

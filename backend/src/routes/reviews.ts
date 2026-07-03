@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, desc, inArray } from 'drizzle-orm';
+import { eq, desc, inArray, and } from 'drizzle-orm';
 import { db } from '../core/db';
 import { jobReviews, agentJobs } from '../core/db/schema';
 import { requireAuth } from '../middleware/requireAuth';
@@ -92,10 +92,6 @@ router.post('/jobs/:id/review/claim', requireAuth, requirePermission('jobs:revie
   const [review] = await db.select().from(jobReviews).where(eq(jobReviews.jobId, jobId)).limit(1);
 
   if (!review) { res.status(404).json({ error: 'Review not found' }); return; }
-  if (review.status !== 'pending_review' && review.status !== 'needs_changes') {
-    res.status(409).json({ error: `Cannot claim — status is ${review.status}` });
-    return;
-  }
 
   const groups = userGroups(req);
   if (!req.user!.permissions.includes('*') && !groups.includes(review.groupName)) {
@@ -103,16 +99,26 @@ router.post('/jobs/:id/review/claim', requireAuth, requirePermission('jobs:revie
     return;
   }
 
-  await db.update(jobReviews).set({
+  // Atomic claim: WHERE includes status check to prevent race conditions
+  const claimed = await db.update(jobReviews).set({
     status:       'under_review',
     reviewerId:   req.user!.userId === 'env-admin' ? undefined : req.user!.userId,
     reviewerName: req.user!.username,
     updatedAt:    new Date(),
-  }).where(eq(jobReviews.jobId, jobId));
+  }).where(
+    and(
+      eq(jobReviews.jobId, jobId),
+      inArray(jobReviews.status, ['pending_review', 'needs_changes'])
+    )
+  ).returning();
+
+  if (claimed.length === 0) {
+    res.status(409).json({ error: `Cannot claim — review is already ${review.status}` });
+    return;
+  }
 
   await logAudit(req.user!.userId, req.user!.username, 'job.review.claimed', 'job', jobId);
-  const [updated] = await db.select().from(jobReviews).where(eq(jobReviews.jobId, jobId));
-  res.json({ review: updated });
+  res.json({ review: claimed[0] });
 });
 
 // POST /api/jobs/:id/review/submit — member submits review note

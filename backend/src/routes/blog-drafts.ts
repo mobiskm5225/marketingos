@@ -12,15 +12,22 @@ const VALID_STATUSES = ['pending', 'in_review', 'approved', 'rejected'] as const
 
 // GET /api/blog-drafts
 router.get('/blog-drafts', requireAuth, requirePermission(PERM), async (req: Request, res: Response) => {
-  const { status, limit = '50', offset = '0' } = req.query as Record<string, string>;
+  const { status } = req.query as Record<string, string>;
+  const limitNum = Math.min(Math.max(parseInt(String(req.query.limit || '50'), 10) || 50, 1), 200);
+  const offsetNum = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
+
+  if (status && !VALID_STATUSES.includes(status as any)) {
+    res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    return;
+  }
 
   const rows = await db
     .select()
     .from(blogDrafts)
     .where(status ? eq(blogDrafts.status, status) : undefined)
     .orderBy(desc(blogDrafts.createdAt))
-    .limit(Number(limit))
-    .offset(Number(offset));
+    .limit(limitNum)
+    .offset(offsetNum);
 
   res.json({ drafts: rows });
 });

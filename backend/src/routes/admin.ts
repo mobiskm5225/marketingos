@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
-import { eq, count, desc } from 'drizzle-orm';
+import { eq, count, desc, and, ilike } from 'drizzle-orm';
 import { db } from '../core/db';
 import { users, groups, permissions, groupPermissions, userGroups, auditLogs } from '../core/db/schema';
 import { requireAuth } from '../middleware/requireAuth';
@@ -25,10 +25,22 @@ router.get('/admin/users', ...canUsers, async (_req, res) => {
     createdAt: users.createdAt,
   }).from(users).orderBy(users.createdAt);
 
-  const withGroups = await Promise.all(allUsers.map(async u => {
-    const memberships = await loadUserGroupMemberships(u.id);
+  // Batch load all memberships — single query instead of N+1
+  const allMemberships = await db
+    .select({ userId: userGroups.userId, groupName: groups.name, groupRole: userGroups.groupRole })
+    .from(userGroups)
+    .innerJoin(groups, eq(groups.id, userGroups.groupId));
+
+  const byUser = new Map<string, Array<{ group: string; role: 'member' | 'manager' }>>();
+  for (const m of allMemberships) {
+    if (!byUser.has(m.userId)) byUser.set(m.userId, []);
+    byUser.get(m.userId)!.push({ group: m.groupName, role: m.groupRole as 'member' | 'manager' });
+  }
+
+  const withGroups = allUsers.map(u => {
+    const memberships = byUser.get(u.id) ?? [];
     return { ...u, groups: memberships.map(m => m.group), groupMemberships: memberships };
-  }));
+  });
 
   res.json({ users: withGroups });
 });
@@ -69,16 +81,18 @@ router.patch('/admin/users/:id/groups', ...canUsers, async (req, res) => {
     return;
   }
 
-  await db.delete(userGroups).where(eq(userGroups.userId, id));
-  if (groupIds.length > 0) {
-    await db.insert(userGroups).values(
-      (groupIds as string[]).map(gid => ({
-        userId:    id,
-        groupId:   gid,
-        groupRole: (groupRoles?.[gid] as 'member' | 'manager') ?? 'member',
-      }))
-    );
-  }
+  await db.transaction(async (tx) => {
+    await tx.delete(userGroups).where(eq(userGroups.userId, id));
+    if (groupIds.length > 0) {
+      await tx.insert(userGroups).values(
+        (groupIds as string[]).map(gid => ({
+          userId:    id,
+          groupId:   gid,
+          groupRole: (groupRoles?.[gid] as 'member' | 'manager') ?? 'member',
+        }))
+      );
+    }
+  });
 
   const [groupNames, perms, memberships] = await Promise.all([
     loadUserGroupNames(id),
@@ -109,13 +123,21 @@ router.patch('/admin/users/:id/active', ...canUsers, async (req, res) => {
 router.get('/admin/groups', ...canGroups, async (_req, res) => {
   const allGroups = await db.select().from(groups).orderBy(groups.name);
 
-  const withPerms = await Promise.all(allGroups.map(async g => {
-    const rows = await db
-      .select({ permName: permissions.name, permDesc: permissions.description })
-      .from(groupPermissions)
-      .innerJoin(permissions, eq(permissions.id, groupPermissions.permissionId))
-      .where(eq(groupPermissions.groupId, g.id));
-    return { ...g, permissions: rows.map(r => ({ name: r.permName, description: r.permDesc })) };
+  // Batch load all group permissions — single query instead of N+1
+  const allGroupPerms = await db
+    .select({ groupId: groupPermissions.groupId, permName: permissions.name, permDesc: permissions.description })
+    .from(groupPermissions)
+    .innerJoin(permissions, eq(permissions.id, groupPermissions.permissionId));
+
+  const permsByGroup = new Map<string, Array<{ name: string; description: string | null }>>();
+  for (const gp of allGroupPerms) {
+    if (!permsByGroup.has(gp.groupId)) permsByGroup.set(gp.groupId, []);
+    permsByGroup.get(gp.groupId)!.push({ name: gp.permName, description: gp.permDesc ?? null });
+  }
+
+  const withPerms = allGroups.map(g => ({
+    ...g,
+    permissions: permsByGroup.get(g.id) ?? [],
   }));
 
   res.json({ groups: withPerms });
@@ -134,18 +156,20 @@ router.get('/admin/audit', ...canAudit, async (req, res) => {
   const limit  = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Number(req.query.offset) || 0;
 
+  const auditConditions: ReturnType<typeof eq>[] = [];
+  if (req.query.action)   auditConditions.push(ilike(auditLogs.action,   `%${req.query.action}%`)   as any);
+  if (req.query.username) auditConditions.push(ilike(auditLogs.username, `%${req.query.username}%`) as any);
+  const auditWhere = auditConditions.length > 0 ? and(...auditConditions) : undefined;
+
   const rows = await db
     .select()
     .from(auditLogs)
+    .where(auditWhere)
     .orderBy(desc(auditLogs.createdAt))
     .limit(limit)
     .offset(offset);
 
-  let filtered = rows;
-  if (req.query.action)   filtered = filtered.filter(r => r.action.includes(String(req.query.action)));
-  if (req.query.username) filtered = filtered.filter(r => r.username.includes(String(req.query.username)));
-
-  res.json({ logs: filtered, limit, offset });
+  res.json({ logs: rows, limit, offset });
 });
 
 export default router;

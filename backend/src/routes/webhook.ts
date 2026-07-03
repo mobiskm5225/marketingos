@@ -3,6 +3,7 @@ import { verifyNotionSignature } from '../middleware/auth';
 import { agentRegistry } from '../registry';
 import { db } from '../core/db';
 import { agentJobs } from '../core/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   retrievePage,
   getPageContent,
@@ -64,7 +65,12 @@ async function processPageWithDbCheck(pageId: string): Promise<void> {
     return;
   }
 
-  await dispatchAgent(dbId, pageId, 'webhook');
+  const pageTitle: string | null =
+    page.properties?.Name?.title?.[0]?.plain_text ??
+    page.properties?.title?.title?.[0]?.plain_text ??
+    null;
+
+  await dispatchAgent(dbId, pageId, 'webhook', pageTitle);
 }
 
 async function processBriefUrlTrigger(page: any, briefPageId: string): Promise<void> {
@@ -121,13 +127,31 @@ async function processBriefUrlTrigger(page: any, briefPageId: string): Promise<v
     'Pending'
   );
 
-  await dispatchAgent(NOTION_DB_ID, seoPage.id, 'webhook');
+  await dispatchAgent(NOTION_DB_ID, seoPage.id, 'webhook', title);
 }
 
-async function dispatchAgent(dbId: string, pageId: string, source: string): Promise<void> {
+async function dispatchAgent(dbId: string, pageId: string, source: string, title?: string | null): Promise<void> {
   const agent = agentRegistry.get(dbId);
   if (!agent) {
     log.warn({ dbId }, 'No agent registered for database');
+    return;
+  }
+
+  // Dedup: skip if an active job already exists for this page + agent
+  const [existing] = await db
+    .select({ id: agentJobs.id })
+    .from(agentJobs)
+    .where(
+      and(
+        eq(agentJobs.notionPageId, pageId),
+        eq(agentJobs.agentName, agent.agentName),
+        inArray(agentJobs.status, ['pending', 'processing'])
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    log.info({ pageId, agentName: agent.agentName, existingJobId: existing.id }, 'Active job exists, skipping duplicate dispatch');
     return;
   }
 
@@ -136,6 +160,7 @@ async function dispatchAgent(dbId: string, pageId: string, source: string): Prom
     .values({
       agentName: agent.agentName,
       notionPageId: pageId,
+      title: title ?? null,
       status: 'pending',
       source,
     })
