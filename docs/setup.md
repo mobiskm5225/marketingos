@@ -283,6 +283,12 @@ WHERE status = 'processing'
   AND updated_at < now() - interval '10 minutes';
 ```
 
+### `429 Too Many Requests` on login
+
+Login rate limit reached: 10 attempts per 15 minutes per IP. Wait 15 minutes, then retry. Limit resets automatically.
+
+In local dev, rate limit applies to `localhost` too. If hitting it during testing, restart the backend process to reset the in-memory counter.
+
 ### OpenAI `429 Too Many Requests`
 
 GPT-4o rate limit hit. Wait and retry, or upgrade OpenAI usage tier.

@@ -137,11 +137,57 @@ Direct content ingestion. Creates a Notion page (if configured) and starts analy
 
 ---
 
+## Auth
+
+### `POST /auth/login`
+
+Exchange credentials for a JWT. All `/api/*` routes require the returned token.
+
+**Request Body**
+```json
+{
+  "username": "string (required)",
+  "password": "string (required)"
+}
+```
+
+**Response `200`**
+```json
+{
+  "token": "eyJ...",
+  "user": {
+    "username": "admin",
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "permissions": ["agents:trigger:seo-analyzer", "agents:trigger:blog-reviewer"],
+    "groupMemberships": [{ "group": "content-team", "role": "member" }]
+  }
+}
+```
+
+**Response `400`**
+```json
+{ "error": "username and password are required" }
+```
+
+**Response `401`**
+```json
+{ "error": "Invalid credentials" }
+```
+
+**Response `429`**
+```json
+{ "error": "Too many login attempts. Try again in 15 minutes." }
+```
+
+Rate limit: 10 attempts per 15 minutes per IP. Response headers include `RateLimit-*` (RFC draft-8).
+
+---
+
 ## Jobs
 
 ### `GET /api/jobs`
 
-Paginated job list, newest first.
+Paginated job list, newest first. All filters applied in SQL — pagination counts are accurate.
 
 **Query Parameters**
 
@@ -151,6 +197,7 @@ Paginated job list, newest first.
 | `offset` | number | 0 | Pagination offset |
 | `agent` | string | — | Filter by `seo-analyzer` or `blog-reviewer` |
 | `status` | string | — | Filter by `pending`, `processing`, `done`, or `error` |
+| `q` | string | — | Title search (case-insensitive substring match) |
 
 **Response `200`**
 ```json
@@ -172,7 +219,8 @@ Paginated job list, newest first.
     }
   ],
   "limit": 50,
-  "offset": 0
+  "offset": 0,
+  "total": 284
 }
 ```
 
@@ -287,6 +335,13 @@ Processing is asynchronous. Poll `GET /api/jobs/:jobId` to track progress.
 { "error": "title and content are required" }
 ```
 
+**Response `429`**
+```json
+{ "error": "Agent trigger limit reached. Maximum 20 triggers per hour per user." }
+```
+
+Rate limit: 20 triggers per hour per authenticated user (keyed on user ID).
+
 ---
 
 ### `POST /api/agents/blog-reviewer`
@@ -313,6 +368,13 @@ Trigger Existing Blog Reviewer directly. Crawls the live URL before analysis.
 ```json
 { "error": "title and url are required" }
 ```
+
+**Response `429`**
+```json
+{ "error": "Agent trigger limit reached. Maximum 20 triggers per hour per user." }
+```
+
+Rate limit: 20 triggers per hour per authenticated user (keyed on user ID).
 
 ---
 
@@ -367,4 +429,5 @@ All error responses follow the same shape:
 | 400 | Missing required fields |
 | 401 | Invalid signature or secret |
 | 404 | Job not found |
+| 429 | Rate limit exceeded (login: 10/15 min per IP; agent triggers: 20/hr per user) |
 | 500 | Unexpected server error |

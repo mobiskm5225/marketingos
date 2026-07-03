@@ -50,6 +50,8 @@ Acefone Intelligence is a multi-agent SEO and content analysis platform. AI agen
 |---|---|---|
 | Runtime | Node.js | 18+ |
 | Backend Framework | Express | 5.x |
+| Security Headers | helmet | 8.x |
+| Rate Limiting | express-rate-limit | 8.x |
 | Language | TypeScript | 6.x |
 | TypeScript Executor | tsx | 4.x |
 | ORM | Drizzle ORM | 0.45.x |
@@ -227,6 +229,34 @@ All GPT-4o calls go through `core/ai/openai.ts`. Pricing applied:
 | Output | $10.00 / 1M tokens |
 
 Cost is stored as `DECIMAL(10,6)` in `agentJobs.costUsd`. The `/api/stats` endpoint aggregates by agent and current calendar month.
+
+---
+
+## Security Middleware
+
+### Rate Limiting (`express-rate-limit`)
+
+| Endpoint | Window | Limit | Key |
+|---|---|---|---|
+| `POST /auth/login` | 15 min | 10 req | IP address |
+| `POST /api/agents/*` | 1 hour | 20 req | `user.userId` |
+
+Returns `429` with RFC draft-8 `RateLimit-*` headers on breach. Agent trigger limiter uses `user.userId` (not IP) — internal tool, multiple users share same office IP.
+
+### HTTP Security Headers
+
+**Express (`helmet`)** — applied globally via `app.use(helmet({ contentSecurityPolicy: false }))`. CSP disabled because this is a JSON API; no HTML served from Express.
+
+**nginx** — set on all responses from the frontend container:
+
+| Header | Value |
+|---|---|
+| `X-Frame-Options` | `SAMEORIGIN` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-XSS-Protection` | `1; mode=block` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; ...` |
 
 ---
 
