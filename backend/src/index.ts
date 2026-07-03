@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import helmet from 'helmet';
 import { httpLogger } from './middleware/logger';
 import { requireAuth } from './middleware/requireAuth';
 import healthRouter from './routes/health';
@@ -17,6 +18,8 @@ import log from './logger';
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
+
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // Parse JSON and capture raw body in one pass (rawBody used for HMAC on /webhook)
 app.use(express.json({

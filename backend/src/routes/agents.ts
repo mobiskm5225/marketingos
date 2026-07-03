@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { db } from '../core/db';
 import { agentJobs } from '../core/db/schema';
 import { runSeoAnalyzerDirect } from '../agents/seo-analyzer';
@@ -9,9 +10,18 @@ import log from '../logger';
 
 const router = Router();
 
+const agentTriggerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  keyGenerator: (req) => (req as any).user?.userId ?? req.ip ?? 'unknown',
+  message: { error: 'Agent trigger limit reached. Maximum 20 triggers per hour per user.' },
+});
+
 // POST /api/agents/seo-analyzer
 // Body: { title: string, content: string, url?: string }
-router.post('/agents/seo-analyzer', requirePermission('agents:trigger:seo-analyzer'), async (req: Request, res: Response) => {
+router.post('/agents/seo-analyzer', requirePermission('agents:trigger:seo-analyzer'), agentTriggerLimiter, async (req: Request, res: Response) => {
   const { title, content, url } = req.body ?? {};
 
   if (!title || !content) {
@@ -45,7 +55,7 @@ router.post('/agents/seo-analyzer', requirePermission('agents:trigger:seo-analyz
 
 // POST /api/agents/blog-reviewer
 // Body: { title: string, url: string }
-router.post('/agents/blog-reviewer', requirePermission('agents:trigger:blog-reviewer'), async (req: Request, res: Response) => {
+router.post('/agents/blog-reviewer', requirePermission('agents:trigger:blog-reviewer'), agentTriggerLimiter, async (req: Request, res: Response) => {
   const { title, url } = req.body ?? {};
 
   if (!title || !url) {

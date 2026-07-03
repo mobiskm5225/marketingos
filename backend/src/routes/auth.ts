@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
-import { eq, count, and } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import rateLimit from 'express-rate-limit';
 import { db } from '../core/db';
 import { users, userGroups, groupPermissions, permissions, groups } from '../core/db/schema';
 import { signToken } from '../lib/jwt';
@@ -8,6 +9,14 @@ import { requireAuth } from '../middleware/requireAuth';
 import { logAudit } from '../core/audit';
 
 const router = Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+});
 
 export async function loadUserPermissions(userId: string): Promise<string[]> {
   const rows = await db
@@ -47,7 +56,7 @@ export async function loadUserGroupNames(userId: string): Promise<string[]> {
   return memberships.map(m => m.group);
 }
 
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body ?? {};
 
   if (!username || !password) {
@@ -82,16 +91,13 @@ router.post('/auth/login', async (req, res) => {
     return;
   }
 
-  // Fallback: env-var admin (only when users table empty)
-  const [{ cnt }] = await db.select({ cnt: count() }).from(users);
-  if (Number(cnt) === 0) {
-    const validUser = process.env.ADMIN_USERNAME ?? 'admin';
-    const validPass = process.env.ADMIN_PASSWORD ?? 'admin';
-    if (username === validUser && password === validPass) {
-      const token = signToken({ username, userId: 'env-admin', permissions: ['*'], groupMemberships: [{ group: 'admins', role: 'manager' }] });
-      res.json({ token, user: { username, userId: 'env-admin', permissions: ['*'], groupMemberships: [{ group: 'admins', role: 'manager' }] } });
-      return;
-    }
+  // Fallback: env-var admin (when no DB user with this username exists)
+  const validUser = process.env.ADMIN_USERNAME ?? 'admin';
+  const validPass = process.env.ADMIN_PASSWORD ?? 'admin';
+  if (username === validUser && password === validPass) {
+    const token = signToken({ username, userId: 'env-admin', permissions: ['*'], groupMemberships: [{ group: 'admins', role: 'manager' }] });
+    res.json({ token, user: { username, userId: 'env-admin', permissions: ['*'], groupMemberships: [{ group: 'admins', role: 'manager' }] } });
+    return;
   }
 
   res.status(401).json({ error: 'Invalid credentials' });
@@ -103,11 +109,15 @@ router.get('/auth/me', requireAuth, async (req, res) => {
     res.json({ user: { username: req.user!.username, userId: 'env-admin', permissions: ['*'], groupMemberships: [{ group: 'admins', role: 'manager' }] } });
     return;
   }
-  const [perms, memberships] = await Promise.all([
-    loadUserPermissions(userId),
-    loadUserGroupMemberships(userId),
-  ]);
-  res.json({ user: { username: req.user!.username, userId, permissions: perms, groupMemberships: memberships } });
+  try {
+    const [perms, memberships] = await Promise.all([
+      loadUserPermissions(userId),
+      loadUserGroupMemberships(userId),
+    ]);
+    res.json({ user: { username: req.user!.username, userId, permissions: perms, groupMemberships: memberships } });
+  } catch {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;
