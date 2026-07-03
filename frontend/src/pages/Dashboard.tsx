@@ -4,17 +4,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { api, type Stats, type Job } from '../lib/api';
 import FilterBar, { type FilterCondition, type ColumnDef } from '../components/FilterBar';
 import { applyFilters } from '../lib/filterUtils';
-
-const AGENT_OPTIONS = [
-  { value: 'seo-analyzer',  label: 'SEO Analyzer' },
-  { value: 'blog-reviewer', label: 'Existing Blog Reviewer' },
-];
-const STATUS_OPTIONS = [
-  { value: 'done',       label: 'Done'       },
-  { value: 'processing', label: 'Processing' },
-  { value: 'pending',    label: 'Pending'    },
-  { value: 'error',      label: 'Error'      },
-];
+import { agentLabel, jobIdDisplay, AGENT_OPTIONS, STATUS_OPTIONS } from '../lib/format';
+import { Skeleton, SkeletonRows } from '../components/Skeleton';
 
 const COLUMNS: ColumnDef[] = [
   { key: 'id',        label: 'Number',           type: 'text' },
@@ -25,13 +16,6 @@ const COLUMNS: ColumnDef[] = [
   { key: 'source',    label: 'Source',            type: 'text' },
   { key: 'createdAt', label: 'Created',           type: 'date' },
 ];
-
-function agentLabel(name: string) {
-  return AGENT_OPTIONS.find(o => o.value === name)?.label ?? name;
-}
-function jobIdDisplay(id: string) {
-  return id.replace('job-', 'J-').toUpperCase();
-}
 
 export default function Dashboard() {
   const qc = useQueryClient();
@@ -55,6 +39,10 @@ export default function Dashboard() {
   const rawJobs = (jobsRes?.jobs ?? []) as Job[];
   const jobs = applyFilters(rawJobs as unknown as Record<string, unknown>[], filters, COLUMNS) as unknown as Job[];
   const agentEntries = Object.entries(s?.byAgent ?? {});
+
+  const processing = s?.byStatus?.['processing'] ?? 0;
+  const pending    = s?.byStatus?.['pending'] ?? 0;
+  const queueLabel = s ? (processing > 0 ? 'Active' : pending > 0 ? 'Waiting' : 'Idle') : '—';
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -82,7 +70,7 @@ export default function Dashboard() {
         </div>
         <div className="title-meta">
           <span className="tag"><span className="tag-dot" style={{ background: '#63cc66' }} /> Live</span>
-          <span>Auto-refreshes every 30s</span>
+          <span>Auto-refreshes every 15s</span>
         </div>
       </div>
 
@@ -95,7 +83,7 @@ export default function Dashboard() {
                   <div className="metric-label">Total Jobs</div>
                   <div className="metric-icon">↗</div>
                 </div>
-                <div className="metric-value">{s?.totalJobs ?? '—'}</div>
+                <div className="metric-value">{s ? s.totalJobs : <Skeleton width={56} height={24} />}</div>
               </div>
               <div className="metric-sub">All records</div>
             </div>
@@ -105,9 +93,9 @@ export default function Dashboard() {
                   <div className="metric-label">This Month</div>
                   <div className="metric-icon">$</div>
                 </div>
-                <div className="metric-value">${(s?.thisMonthCostUsd ?? 0).toFixed(2)}</div>
+                <div className="metric-value">{s ? `$${s.thisMonthCostUsd.toFixed(2)}` : <Skeleton width={72} height={24} />}</div>
               </div>
-              <div className="metric-sub">Total ${(s?.totalCostUsd ?? 0).toFixed(4)}</div>
+              <div className="metric-sub">{s ? `Total $${s.totalCostUsd.toFixed(4)}` : ' '}</div>
             </div>
             <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/errors')}>
               <div>
@@ -115,9 +103,9 @@ export default function Dashboard() {
                   <div className="metric-label">Error Rate</div>
                   <div className="metric-icon">!</div>
                 </div>
-                <div className="metric-value">{s?.errorRate ?? 0}%</div>
+                <div className="metric-value">{s ? `${s.errorRate}%` : <Skeleton width={48} height={24} />}</div>
               </div>
-              <div className="metric-sub">{s?.byStatus?.['error'] ?? 0} failed</div>
+              <div className="metric-sub">{s ? `${s.byStatus?.['error'] ?? 0} failed` : ' '}</div>
             </div>
             <div className="metric-card">
               <div>
@@ -125,7 +113,7 @@ export default function Dashboard() {
                   <div className="metric-label">Active Agents</div>
                   <div className="metric-icon">✓</div>
                 </div>
-                <div className="metric-value">{agentEntries.length}</div>
+                <div className="metric-value">{s ? agentEntries.length : <Skeleton width={32} height={24} />}</div>
               </div>
               <div className="metric-sub">Operational</div>
             </div>
@@ -145,10 +133,20 @@ export default function Dashboard() {
             <FilterBar columns={COLUMNS} value={filters} onChange={setFilters} />
 
             <div className="table-wrap">
-              {jl ? (
-                <div className="empty">Loading...</div>
-              ) : jobs.length === 0 ? (
-                <div className="empty">No jobs match the current filter.</div>
+              {!jl && jobs.length === 0 ? (
+                <div className="empty">
+                  {filters.length ? (
+                    <>
+                      <div style={{ marginBottom: 12 }}>No jobs match the current filter.</div>
+                      <button className="sn-btn" onClick={() => setFilters([])}>Clear filters</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ marginBottom: 12 }}>No jobs yet — run your first agent to see activity here.</div>
+                      <NavLink to="/trigger" className="sn-btn sn-btn-primary" style={{ display: 'inline-flex' }}>+ Trigger Agent</NavLink>
+                    </>
+                  )}
+                </div>
               ) : (
                 <table className="sn-table">
                   <thead>
@@ -162,26 +160,30 @@ export default function Dashboard() {
                       <th>Created</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {jobs.map(job => (
-                      <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/jobs/${job.id}`)}>
-                        <td onClick={e => e.stopPropagation()}>
-                          <NavLink to={`/jobs/${job.id}`} className="record-link">{jobIdDisplay(job.id)}</NavLink>
-                        </td>
-                        <td>{agentLabel(job.agentName)}</td>
-                        <td style={{ maxWidth: 260 }} onClick={e => e.stopPropagation()}>
-                          <NavLink to={`/jobs/${job.id}`} className="record-link"
-                            style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {job.title || job.notionPageId || '—'}
-                          </NavLink>
-                        </td>
-                        <td><span className={`status ${job.status}`}>{job.status}</span></td>
-                        <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : '—'}</td>
-                        <td><span className="tag">{job.source ?? '—'}</span></td>
-                        <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
+                  {jl ? (
+                    <SkeletonRows rows={6} cols={7} />
+                  ) : (
+                    <tbody>
+                      {jobs.map(job => (
+                        <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/jobs/${job.id}`)}>
+                          <td onClick={e => e.stopPropagation()}>
+                            <NavLink to={`/jobs/${job.id}`} className="record-link">{jobIdDisplay(job.id)}</NavLink>
+                          </td>
+                          <td>{agentLabel(job.agentName)}</td>
+                          <td style={{ maxWidth: 260 }} onClick={e => e.stopPropagation()}>
+                            <NavLink to={`/jobs/${job.id}`} className="record-link"
+                              style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {job.title || job.notionPageId || '—'}
+                            </NavLink>
+                          </td>
+                          <td><span className={`status ${job.status}`}>{job.status}</span></td>
+                          <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : '—'}</td>
+                          <td><span className="tag">{job.source ?? '—'}</span></td>
+                          <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  )}
                 </table>
               )}
             </div>
@@ -197,7 +199,7 @@ export default function Dashboard() {
           </div>
           <div className="side-section">
             <div className="side-label">System health</div>
-            <div className="kv"><span>Queue status</span><span>Normal</span></div>
+            <div className="kv"><span>Queue status</span><span>{queueLabel}</span></div>
             <div className="kv">
               <span>Open errors</span>
               <span style={{ cursor: 'pointer' }} onClick={() => navigate('/errors')}>
@@ -209,13 +211,13 @@ export default function Dashboard() {
             <div className="kv">
               <span>Processing</span>
               <span style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs/active')}>
-                {s?.byStatus?.['processing'] ?? 0}
+                {processing}
               </span>
             </div>
             <div className="kv">
               <span>Pending</span>
               <span style={{ cursor: 'pointer' }} onClick={() => navigate('/jobs/active')}>
-                {s?.byStatus?.['pending'] ?? 0}
+                {pending}
               </span>
             </div>
           </div>
@@ -225,7 +227,7 @@ export default function Dashboard() {
               <div className="mini-list">
                 {agentEntries.map(([name, data]) => (
                   <div key={name} className="mini-item" style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/jobs`)}>
+                    onClick={() => navigate(`/jobs?agent=${encodeURIComponent(name)}`)}>
                     <div>
                       <strong>{agentLabel(name)}</strong>
                       <small>{data.jobs} jobs · Operational</small>

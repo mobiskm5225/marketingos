@@ -4,17 +4,8 @@ import { NavLink, useSearchParams, useNavigate } from 'react-router-dom';
 import { api, type Job } from '../lib/api';
 import FilterBar, { type FilterCondition, type ColumnDef } from '../components/FilterBar';
 import { applyFilters } from '../lib/filterUtils';
-
-const AGENT_OPTIONS = [
-  { value: 'seo-analyzer',  label: 'SEO Analyzer' },
-  { value: 'blog-reviewer', label: 'Existing Blog Reviewer' },
-];
-const STATUS_OPTIONS = [
-  { value: 'done',       label: 'Done'       },
-  { value: 'processing', label: 'Processing' },
-  { value: 'pending',    label: 'Pending'    },
-  { value: 'error',      label: 'Error'      },
-];
+import { agentLabel, jobIdDisplay, AGENT_OPTIONS, STATUS_OPTIONS } from '../lib/format';
+import { SkeletonRows } from '../components/Skeleton';
 
 const COLUMNS: ColumnDef[] = [
   { key: 'id',           label: 'Number',           type: 'text' },
@@ -27,13 +18,6 @@ const COLUMNS: ColumnDef[] = [
   { key: 'source',       label: 'Source',            type: 'text' },
   { key: 'createdAt',    label: 'Created',           type: 'date' },
 ];
-
-function agentLabel(name: string) {
-  return AGENT_OPTIONS.find(o => o.value === name)?.label ?? name;
-}
-function jobIdDisplay(id: string) {
-  return id.replace('job-', 'J-').toUpperCase();
-}
 
 type SortKey = 'id' | 'agent' | 'title' | 'status' | 'cost' | 'created';
 
@@ -64,29 +48,33 @@ export default function Jobs({ initialStatus = '' }: { initialStatus?: string })
     if (newFilters.length) { setFilters(newFilters); setPage(0); }
   }, [searchParams.toString()]);
 
-  // Extract backend-compatible params (only exact 'is' matches)
+  // Extract backend-compatible params
   const backendAgent  = filters.find(f => f.col === 'agentName' && f.op === 'is')?.val;
   const backendStatus = filters.find(f => f.col === 'status'    && f.op === 'is')?.val;
+  const backendQ      = filters.find(f => f.col === 'title'     && f.op === 'contains')?.val;
 
   // Filters that cannot be pushed to backend — applied client-side
   const clientFilters = filters.filter(f =>
     !(f.col === 'agentName' && f.op === 'is') &&
-    !(f.col === 'status'    && f.op === 'is')
+    !(f.col === 'status'    && f.op === 'is') &&
+    !(f.col === 'title'     && f.op === 'contains')
   );
 
   const { data, isLoading } = useQuery({
-    queryKey: ['jobs', page, backendAgent, backendStatus],
+    queryKey: ['jobs', page, backendAgent, backendStatus, backendQ],
     queryFn: () => api.getJobs({
-      limit: PAGE_SIZE,
+      limit:  PAGE_SIZE,
       offset: page * PAGE_SIZE,
       agent:  backendAgent  || undefined,
       status: backendStatus || undefined,
+      q:      backendQ      || undefined,
     }),
     refetchInterval: 15_000,
   });
 
   const rawJobs = (data?.jobs ?? []) as Job[];
-  const hasNext = rawJobs.length === PAGE_SIZE;
+  const total   = data?.total ?? 0;
+  const hasNext = (page + 1) * PAGE_SIZE < total;
 
   const filtered = applyFilters(rawJobs as unknown as Record<string, unknown>[], clientFilters, COLUMNS) as unknown as Job[];
 
@@ -136,6 +124,8 @@ export default function Jobs({ initialStatus = '' }: { initialStatus?: string })
     return { cursor: 'pointer', userSelect: 'none', background: sortBy === col ? '#e8ecf0' : undefined };
   }
 
+  const hasAnyFilter = filters.length > 0;
+
   return (
     <>
       <div className="crumb-row">
@@ -162,7 +152,7 @@ export default function Jobs({ initialStatus = '' }: { initialStatus?: string })
           <div className="list-title">
             Jobs
             <span className="table-name">x_acf_mi_job</span>
-            <span className="count">{jobs.length}{hasNext && !clientFilters.length ? '+' : ''}</span>
+            <span className="count">{clientFilters.length ? jobs.length : total}</span>
           </div>
           <div className="toolbar-spacer" />
           <button className="toolbar-icon" onClick={exportCSV}>Export</button>
@@ -171,10 +161,20 @@ export default function Jobs({ initialStatus = '' }: { initialStatus?: string })
         <FilterBar columns={COLUMNS} value={filters} onChange={f => { setFilters(f); setPage(0); }} />
 
         <div className="table-wrap">
-          {isLoading ? (
-            <div className="empty">Loading...</div>
-          ) : jobs.length === 0 ? (
-            <div className="empty">No records match the current filter.</div>
+          {jobs.length === 0 && !isLoading ? (
+            <div className="empty">
+              {hasAnyFilter ? (
+                <>
+                  <div style={{ marginBottom: 12 }}>No records match the current filter.</div>
+                  <button className="sn-btn" onClick={() => { setFilters([]); setPage(0); }}>Clear filters</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 12 }}>No jobs yet — run your first agent to see records here.</div>
+                  <NavLink to="/trigger" className="sn-btn sn-btn-primary" style={{ display: 'inline-flex' }}>+ Trigger Agent</NavLink>
+                </>
+              )}
+            </div>
           ) : (
             <table className="sn-table">
               <thead>
@@ -203,37 +203,45 @@ export default function Jobs({ initialStatus = '' }: { initialStatus?: string })
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {jobs.map(job => (
-                  <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/jobs/${job.id}`)}>
-                    <td onClick={e => e.stopPropagation()}>
-                      <NavLink to={`/jobs/${job.id}`} className="record-link">{jobIdDisplay(job.id)}</NavLink>
-                    </td>
-                    <td>{agentLabel(job.agentName)}</td>
-                    <td style={{ maxWidth: 280 }} onClick={e => e.stopPropagation()}>
-                      <NavLink to={`/jobs/${job.id}`} className="record-link"
-                        style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {job.title || job.notionPageId || '—'}
-                      </NavLink>
-                    </td>
-                    <td><span className={`status ${job.status}`}>{job.status}</span></td>
-                    <td className="mono">{job.inputTokens  != null ? job.inputTokens.toLocaleString()  : '—'}</td>
-                    <td className="mono">{job.outputTokens != null ? job.outputTokens.toLocaleString() : '—'}</td>
-                    <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : '—'}</td>
-                    <td><span className="tag">{job.source ?? '—'}</span></td>
-                    <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
+              {isLoading ? (
+                <SkeletonRows rows={8} cols={9} />
+              ) : (
+                <tbody>
+                  {jobs.map(job => (
+                    <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/jobs/${job.id}`)}>
+                      <td onClick={e => e.stopPropagation()}>
+                        <NavLink to={`/jobs/${job.id}`} className="record-link">{jobIdDisplay(job.id)}</NavLink>
+                      </td>
+                      <td>{agentLabel(job.agentName)}</td>
+                      <td style={{ maxWidth: 280 }} onClick={e => e.stopPropagation()}>
+                        <NavLink to={`/jobs/${job.id}`} className="record-link"
+                          style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {job.title || job.notionPageId || '—'}
+                        </NavLink>
+                      </td>
+                      <td><span className={`status ${job.status}`}>{job.status}</span></td>
+                      <td className="mono">{job.inputTokens  != null ? job.inputTokens.toLocaleString()  : '—'}</td>
+                      <td className="mono">{job.outputTokens != null ? job.outputTokens.toLocaleString() : '—'}</td>
+                      <td className="mono">{job.costUsd ? `$${Number(job.costUsd).toFixed(4)}` : '—'}</td>
+                      <td><span className="tag">{job.source ?? '—'}</span></td>
+                      <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              )}
             </table>
           )}
         </div>
 
         <div className="list-footer">
-          <span>Rows {page * PAGE_SIZE + 1} to {page * PAGE_SIZE + jobs.length}</span>
+          <span>
+            {total > 0
+              ? `Rows ${page * PAGE_SIZE + 1} to ${Math.min((page + 1) * PAGE_SIZE, total)} of ${total}`
+              : 'No rows'}
+          </span>
           <div className="pager">
             <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>‹</button>
-            <span>Page {page + 1}</span>
+            <span>Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={!hasNext}>›</button>
           </div>
         </div>

@@ -2,18 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink } from 'react-router-dom';
 import { api, type Job, type Stats } from '../lib/api';
-
-function agentLabel(name: string) {
-  const map: Record<string, string> = {
-    'seo-analyzer':  'SEO Analyzer',
-    'blog-reviewer': 'Existing Blog Reviewer',
-  };
-  return map[name] ?? name;
-}
-
-function jobIdDisplay(id: string) {
-  return id.replace('job-', 'J-').toUpperCase();
-}
+import { agentLabel, jobIdDisplay } from '../lib/format';
 
 function elapsed(createdAt: string, now: number): string {
   const diff = Math.max(0, now - new Date(createdAt).getTime());

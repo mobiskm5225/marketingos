@@ -3,14 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { api, type Notification } from '../lib/api';
-
-function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)  return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
+import { timeAgo } from '../lib/format';
 
 const TYPE_ICON: Record<string, string> = {
   job_done:    '✓',
@@ -252,7 +245,7 @@ export default function NotificationPanel() {
                   fontSize: 12, fontWeight: 700, color: 'var(--sn-link)',
                   border: 0, background: 'transparent', cursor: 'pointer',
                 }}>
-                View all errors →
+                Open error log →
               </button>
             </div>
           )}

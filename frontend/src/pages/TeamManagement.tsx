@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, type TeamMember } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useToast } from '../lib/toast';
+import ConfirmButton from '../components/ConfirmButton';
 
 const ROLE_COLOR = { manager: '#1f6f35', member: '#1a56a4' };
 const ROLE_BG    = { manager: '#f0faf3', member: '#eff6ff' };
@@ -86,16 +88,20 @@ function MemberTable({ groupName, members, onRefresh }: {
   onRefresh: () => void;
 }) {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const onError = (err: Error) => { toast(err.message, 'error'); onRefresh(); };
 
   const roleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: 'member' | 'manager' }) =>
       api.setTeamRole(groupName, userId, role),
     onSuccess: onRefresh,
+    onError,
   });
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) => api.removeTeamMember(groupName, userId),
     onSuccess: onRefresh,
+    onError,
   });
 
   return (
@@ -130,11 +136,14 @@ function MemberTable({ groupName, members, onRefresh }: {
                 onClick={() => roleMutation.mutate({ userId: m.userId, role: m.groupRole === 'manager' ? 'member' : 'manager' })}>
                 {m.groupRole === 'manager' ? 'Demote' : 'Promote'}
               </button>
-              <button className="sn-btn" style={{ fontSize: 11, padding: '3px 10px', color: '#b42318', borderColor: '#b42318' }}
+              <ConfirmButton
+                style={{ fontSize: 11, padding: '3px 10px', color: '#b42318', borderColor: '#b42318' }}
                 disabled={removeMutation.isPending}
-                onClick={() => removeMutation.mutate(m.userId)}>
+                confirmLabel="Remove?"
+                title={`Remove ${m.username} from ${groupName}`}
+                onConfirm={() => removeMutation.mutate(m.userId)}>
                 Remove
-              </button>
+              </ConfirmButton>
             </div>
           )}
           {m.userId === user?.userId && (

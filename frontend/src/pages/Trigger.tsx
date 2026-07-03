@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiPost } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -35,6 +35,11 @@ export default function Trigger() {
 
   const wordCount = seoContent.trim() ? seoContent.trim().split(/\s+/).length : 0;
   const warnWords = wordCount > 0 && wordCount < 300;
+
+  function clearActiveForm() {
+    if (tab === 'seo') { setSeoTitle(''); setSeoContent(''); setSeoUrl(''); setSeoError(''); }
+    else { setBlogTitle(''); setBlogUrl(''); setBlogError(''); }
+  }
 
   function handleSeoKey(e: React.KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -81,9 +86,8 @@ export default function Trigger() {
       <div className="crumb-row">
         <div className="breadcrumb"><span>MI OS</span><span>/</span><strong>Trigger Agent</strong></div>
         <div className="record-actions">
-          <button className="sn-btn" type="button"
-            onClick={() => { setSeoTitle(''); setSeoContent(''); setSeoUrl(''); setBlogTitle(''); setBlogUrl(''); }}>
-            Clear all
+          <button className="sn-btn" type="button" onClick={clearActiveForm}>
+            Clear form
           </button>
           <button className="sn-btn sn-btn-primary" form={tab === 'seo' ? 'seo-form' : 'blog-form'} type="submit">
             Submit
@@ -94,12 +98,12 @@ export default function Trigger() {
         <div>
           <div className="title-kicker">Record producer</div>
           <h1 className="page-title">Trigger Agent</h1>
-          <p className="page-sub">Run directly from the workspace â€” no Notion webhook needed.</p>
+          <p className="page-sub">Run directly from the workspace &mdash; no Notion webhook needed.</p>
         </div>
         <div className="title-meta">
           <span className="tag"><span className="tag-dot" /> Direct API</span>
-          <span>~30â€“60s per run</span>
-          <span style={{ color: '#697a82', fontSize: 12 }}>Tip: âŒ˜+Enter to submit</span>
+          <span>~30&ndash;60s per run</span>
+          <span style={{ color: '#697a82', fontSize: 12 }}>Tip: Ctrl+Enter to submit</span>
         </div>
       </div>
 
@@ -124,7 +128,7 @@ export default function Trigger() {
               </div>
               <form id="seo-form" onSubmit={handleSeoSubmit} onKeyDown={handleSeoKey}>
                 <div className="form-grid">
-                  <div className="field-label">Blog title <span className="req">*</span></div>
+                  <div className="field-label">Draft title <span className="req">*</span></div>
                   <div className="field-control">
                     <input className="sn-input" type="text" required value={seoTitle}
                       onChange={e => setSeoTitle(e.target.value)}
@@ -135,22 +139,22 @@ export default function Trigger() {
                     <input className="sn-input" type="url" value={seoUrl}
                       onChange={e => setSeoUrl(e.target.value)}
                       placeholder="https://acefone.com/blog/..." />
-                    <div className="help-text">Optional â€” used for canonical link analysis.</div>
+                    <div className="help-text">Optional &mdash; used for canonical link analysis.</div>
                   </div>
-                  <div className="field-label">Blog content <span className="req">*</span></div>
+                  <div className="field-label">Draft content <span className="req">*</span></div>
                   <div className="field-control">
                     <textarea className="sn-textarea" id="content" required value={seoContent}
                       onChange={e => setSeoContent(e.target.value)}
                       placeholder="Paste your draft markdown or plain text..." />
                     <div className="word-count">
                       <span className={warnWords ? 'warn' : ''}>{seoContent.length} characters</span>
-                      <span className={warnWords ? 'warn' : ''}>{wordCount} words{warnWords ? ' â€” minimum 300 recommended' : ''}</span>
+                      <span className={warnWords ? 'warn' : ''}>{wordCount} words{warnWords ? ' — minimum 300 recommended' : ''}</span>
                     </div>
                   </div>
                 </div>
                 {seoError && <div className="alert error" style={{ marginTop: 12 }}>{seoError}</div>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                  <button type="button" className="sn-btn" onClick={() => { setSeoTitle(''); setSeoContent(''); setSeoUrl(''); }}>Cancel</button>
+                  <button type="button" className="sn-btn" onClick={() => navigate('/')}>Cancel</button>
                   <button id="seo-submit" type="submit" className="sn-btn sn-btn-primary" disabled={seoLoading || !seoTitle || !seoContent}>
                     {seoLoading ? <><span className="spinner" /> Running analysis...</> : 'Run SEO Analysis'}
                   </button>
@@ -161,11 +165,11 @@ export default function Trigger() {
             <>
               <div className="info-message">
                 <strong>Info</strong>
-                <span>Enter a live blog URL â€” the workspace will crawl the page and run a full post-publish audit.</span>
+                <span>Enter a live blog URL &mdash; the workspace will crawl the page and run a full post-publish audit.</span>
               </div>
               <form id="blog-form" onSubmit={handleBlogSubmit} onKeyDown={handleBlogKey}>
                 <div className="form-grid">
-                  <div className="field-label">Blog title <span className="req">*</span></div>
+                  <div className="field-label">Published blog title <span className="req">*</span></div>
                   <div className="field-control">
                     <input className="sn-input" type="text" required value={blogTitle}
                       onChange={e => setBlogTitle(e.target.value)}
@@ -181,7 +185,7 @@ export default function Trigger() {
                 </div>
                 {blogError && <div className="alert error" style={{ marginTop: 12 }}>{blogError}</div>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                  <button type="button" className="sn-btn" onClick={() => { setBlogTitle(''); setBlogUrl(''); }}>Cancel</button>
+                  <button type="button" className="sn-btn" onClick={() => navigate('/')}>Cancel</button>
                   <button id="blog-submit" type="submit" className="sn-btn sn-btn-primary" disabled={blogLoading || !blogTitle || !blogUrl}>
                     {blogLoading ? <><span className="spinner" /> Crawling & analysing...</> : 'Run Blog Review'}
                   </button>

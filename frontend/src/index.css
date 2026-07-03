@@ -21,6 +21,7 @@
   --sn-orange-soft: #fff2dc;
   --sn-red: #b42318;
   --sn-red-soft: #fff0f0;
+  --sn-accent: #08763c;
   --sn-shadow: 0 1px 2px rgba(0,0,0,.08), 0 10px 30px rgba(18,31,38,.08);
   --sn-radius: 4px;
   --sn-radius-lg: 8px;
@@ -185,15 +186,22 @@ svg { display: block; }
   height: 40px; background: #fff; border-bottom: 1px solid var(--sn-border);
   display: flex; align-items: flex-end; padding: 0 14px; gap: 4px;
   position: sticky; top: 54px; z-index: 14;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
 }
 .ws-tab {
   height: 34px; display: flex; align-items: center; gap: 8px;
   padding: 0 12px; border: 1px solid var(--sn-border); border-bottom: 0;
   border-radius: 6px 6px 0 0; background: #f6f8f9; color: #394b53;
   font-size: 13px; font-weight: 700; max-width: 220px; text-decoration: none;
+  flex-shrink: 0; white-space: nowrap;
 }
 .ws-tab.active { background: #fff; color: #0b1f27; position: relative; top: 1px; }
-.ws-tab .close { font-size: 14px; color: #7a878d; margin-left: 4px; }
+.ws-tab .close {
+  font-size: 14px; color: #7a878d; margin-left: 4px;
+  width: 16px; height: 16px; border-radius: 50%;
+  display: grid; place-items: center; line-height: 1;
+}
+.ws-tab .close:hover { background: #e3e8ea; color: var(--sn-red); }
 
 /* Content area */
 .sn-content { padding: 18px 20px 32px; min-width: 0; flex: 1; }
@@ -535,6 +543,10 @@ table.sn-table { width: 100%; border-collapse: separate; border-spacing: 0; min-
 .md th { background: #f4f6f8; color: #43565e; }
 .md li { margin: 4px 0 4px 20px; }
 .md hr { border: none; border-top: 1px solid var(--sn-border); margin: 14px 0; }
+.md a { color: var(--sn-link); text-decoration: underline; text-underline-offset: 2px; }
+.md a:hover { color: #003f9e; }
+.md del { color: #8a979d; }
+.md strong { color: #132a33; }
 
 .empty { padding: 44px 16px; text-align: center; color: #6b7c83; font-size: 13px; }
 
@@ -542,8 +554,19 @@ table.sn-table { width: 100%; border-collapse: separate; border-spacing: 0; min-
 .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse 1.4s infinite; }
 
+/* Skeleton loading shimmer */
+.skeleton {
+  display: inline-block;
+  background: linear-gradient(90deg, #e8ecef 25%, #dde3e7 37%, #e8ecef 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 
 /* Responsive */
 @media (max-width: 1200px) {

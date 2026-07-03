@@ -40,6 +40,7 @@ export interface JobsResponse {
   jobs: Job[];
   limit: number;
   offset: number;
+  total: number;
 }
 
 export interface Notification {
@@ -65,13 +66,29 @@ function authHeaders(): Record<string, string> {
 
 function handleUnauthorized(): void {
   clearToken();
-  window.location.reload();
+  window.location.replace('/');
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
   if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `${res.status} ${res.statusText}` }));
+    throw new Error(err.error ?? `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Request failed');
+  }
   return res.json();
 }
 
@@ -179,13 +196,14 @@ export interface AdminGroup {
 }
 
 export const api = {
-  getJobs: (params?: { limit?: number; offset?: number; agent?: string; status?: string }) => {
-    const q = new URLSearchParams();
-    if (params?.limit)  q.set('limit',  String(params.limit));
-    if (params?.offset) q.set('offset', String(params.offset));
-    if (params?.agent)  q.set('agent',  params.agent);
-    if (params?.status) q.set('status', params.status);
-    const qs = q.toString();
+  getJobs: (params?: { limit?: number; offset?: number; agent?: string; status?: string; q?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.limit)  sp.set('limit',  String(params.limit));
+    if (params?.offset) sp.set('offset', String(params.offset));
+    if (params?.agent)  sp.set('agent',  params.agent);
+    if (params?.status) sp.set('status', params.status);
+    if (params?.q)      sp.set('q',      params.q);
+    const qs = sp.toString();
     return get<JobsResponse>(`/jobs${qs ? `?${qs}` : ''}`);
   },
   getJob:   (id: string) => get<JobDetail>(`/jobs/${id}`),
@@ -193,16 +211,10 @@ export const api = {
 
   getNotifications: () => get<NotificationsResponse>('/notifications'),
   getUnreadCount:   () => get<{ count: number }>('/notifications/unread-count'),
-  markRead:         (id: string) => apiPost<{ ok: boolean }>(`/notifications/${id}/read`, {}),
+  markRead:         (id: string) => apiPatch<{ ok: boolean }>(`/notifications/${id}/read`, {}),
   markAllRead:      () => apiPost<{ ok: boolean }>('/notifications/read-all', {}),
-  deleteNotification: (id: string) => fetch(`/api/notifications/${id}`, {
-    method: 'DELETE',
-    headers: { ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
-  }).then(r => r.json()),
-  clearReadNotifications: () => fetch('/api/notifications', {
-    method: 'DELETE',
-    headers: { ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
-  }).then(r => r.json()),
+  deleteNotification:     (id: string) => apiDelete<{ ok: boolean }>(`/notifications/${id}`),
+  clearReadNotifications: () => apiDelete<{ ok: boolean }>('/notifications'),
 
   // Admin
   listUsers:       () => get<{ users: AdminUser[] }>('/admin/users'),
@@ -231,9 +243,7 @@ export const api = {
   setTeamRole:      (groupName: string, userId: string, role: 'member' | 'manager') =>
     apiPatch<{ ok: boolean }>(`/team/${encodeURIComponent(groupName)}/members/${userId}/role`, { role }),
   removeTeamMember: (groupName: string, userId: string) =>
-    fetch(`/api/team/${encodeURIComponent(groupName)}/members/${userId}`, {
-      method: 'DELETE', headers: { ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
-    }).then(r => r.json()) as Promise<{ ok: boolean }>,
+    apiDelete<{ ok: boolean }>(`/team/${encodeURIComponent(groupName)}/members/${userId}`),
 
   // Blog Drafts
   getBlogDrafts:   (params?: { status?: string; limit?: number; offset?: number }) => {

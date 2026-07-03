@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, type BlogDraft } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useToast } from '../lib/toast';
+import { timeAgo } from '../lib/format';
 
 const STATUS_COLOR: Record<string, string> = {
   pending:   '#f0a500',
@@ -21,14 +23,6 @@ const STATUS_LABEL: Record<string, string> = {
   approved:  'Approved',
   rejected:  'Rejected',
 };
-
-function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)    return `${diff}s ago`;
-  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
 
 export default function BlogDrafts() {
   const { hasPermission } = useAuth();
@@ -112,6 +106,7 @@ function DraftRow({
   onToggle: () => void;
   onUpdated: () => void;
 }) {
+  const { toast } = useToast();
   const [reviewNote, setReviewNote] = useState(draft.reviewNote ?? '');
   const [deciding, setDeciding] = useState(false);
 
@@ -119,6 +114,7 @@ function DraftRow({
     mutationFn: (body: { status?: string; reviewNote?: string }) =>
       api.updateBlogDraft(draft.id, body),
     onSuccess: () => { onUpdated(); setDeciding(false); },
+    onError: (err: Error) => { toast(err.message, 'error'); onUpdated(); },
   });
 
   function claim() { mutation.mutate({ status: 'in_review' }); }

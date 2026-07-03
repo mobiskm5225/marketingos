@@ -3,18 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api, type Job } from '../lib/api';
 import { useAuth } from '../lib/auth';
-
-const STATUS_COLOR: Record<string, string> = {
-  pending: '#f0a500', processing: '#1a56a4', done: '#1f6f35', error: '#b42318',
-};
-
-function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)    return `${diff}s ago`;
-  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
+import { timeAgo } from '../lib/format';
 
 export default function BlogReviewerJobs() {
   const { hasPermission } = useAuth();
@@ -33,7 +22,9 @@ export default function BlogReviewerJobs() {
     refetchInterval: 15_000,
   });
 
-  const jobs = data?.jobs ?? [];
+  const jobs  = data?.jobs ?? [];
+  const total = data?.total ?? 0;
+  const hasNext = (page + 1) * PAGE < total;
 
   return (
     <>
@@ -97,13 +88,7 @@ export default function BlogReviewerJobs() {
                     )}
                   </td>
                   <td style={{ padding: '10px 14px' }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                      background: STATUS_COLOR[job.status] + '18',
-                      color: STATUS_COLOR[job.status] ?? '#697a82',
-                    }}>
-                      {job.status}
-                    </span>
+                    <span className={`status ${job.status}`}>{job.status}</span>
                   </td>
                   <td style={{ padding: '10px 14px', color: '#697a82', fontSize: 12 }}>{job.source ?? '—'}</td>
                   <td style={{ padding: '10px 14px', color: '#697a82', fontSize: 12 }}>
@@ -122,12 +107,14 @@ export default function BlogReviewerJobs() {
           </table>
         )}
 
-        {(page > 0 || jobs.length === PAGE) && (
+        {(page > 0 || hasNext) && (
           <div style={{ display: 'flex', gap: 8, padding: '10px 18px', borderTop: '1px solid #e8edf0', justifyContent: 'flex-end' }}>
             <button className="sn-btn" style={{ fontSize: 12 }} disabled={page === 0}
               onClick={() => setPage(p => p - 1)}>← Prev</button>
-            <span style={{ fontSize: 12, color: '#697a82', alignSelf: 'center' }}>Page {page + 1}</span>
-            <button className="sn-btn" style={{ fontSize: 12 }} disabled={jobs.length < PAGE}
+            <span style={{ fontSize: 12, color: '#697a82', alignSelf: 'center' }}>
+              Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE))}
+            </span>
+            <button className="sn-btn" style={{ fontSize: 12 }} disabled={!hasNext}
               onClick={() => setPage(p => p + 1)}>Next →</button>
           </div>
         )}

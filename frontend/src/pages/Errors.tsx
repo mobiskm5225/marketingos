@@ -4,11 +4,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { api, type Job } from '../lib/api';
 import FilterBar, { type FilterCondition, type ColumnDef } from '../components/FilterBar';
 import { applyFilters } from '../lib/filterUtils';
-
-const AGENT_OPTIONS = [
-  { value: 'seo-analyzer',  label: 'SEO Analyzer' },
-  { value: 'blog-reviewer', label: 'Existing Blog Reviewer' },
-];
+import { agentLabel, jobIdDisplay, AGENT_OPTIONS } from '../lib/format';
+import { SkeletonRows } from '../components/Skeleton';
 
 const COLUMNS: ColumnDef[] = [
   { key: 'id',           label: 'Number',        type: 'text' },
@@ -18,13 +15,6 @@ const COLUMNS: ColumnDef[] = [
   { key: 'source',       label: 'Source',         type: 'text' },
   { key: 'createdAt',    label: 'Created',        type: 'date' },
 ];
-
-function agentLabel(name: string) {
-  return AGENT_OPTIONS.find(o => o.value === name)?.label ?? name;
-}
-function jobIdDisplay(id: string) {
-  return id.replace('job-', 'J-').toUpperCase();
-}
 
 const PAGE_SIZE = 20;
 
@@ -40,7 +30,8 @@ export default function Errors() {
   });
 
   const rawJobs = (data?.jobs ?? []) as Job[];
-  const hasNext = rawJobs.length === PAGE_SIZE;
+  const total   = data?.total ?? 0;
+  const hasNext = (page + 1) * PAGE_SIZE < total;
   const jobs = applyFilters(rawJobs as unknown as Record<string, unknown>[], filters, COLUMNS) as unknown as Job[];
 
   return (
@@ -72,7 +63,7 @@ export default function Errors() {
           <div className="list-title">
             Errors
             <span className="table-name">x_acf_mi_job</span>
-            <span className="count">{jobs.length}{hasNext ? '+' : ''}</span>
+            <span className="count">{filters.length ? jobs.length : total}</span>
           </div>
           <div className="toolbar-spacer" />
         </div>
@@ -80,9 +71,7 @@ export default function Errors() {
         <FilterBar columns={COLUMNS} value={filters} onChange={f => { setFilters(f); setPage(0); }} />
 
         <div className="table-wrap">
-          {isLoading ? (
-            <div className="empty">Loading...</div>
-          ) : jobs.length === 0 ? (
+          {!isLoading && jobs.length === 0 ? (
             <div className="empty">No errors found — all agent runs completed successfully.</div>
           ) : (
             <table className="sn-table">
@@ -96,6 +85,7 @@ export default function Errors() {
                   <th>Created</th>
                 </tr>
               </thead>
+              {isLoading ? <SkeletonRows rows={6} cols={6} /> : (
               <tbody>
                 {jobs.map(job => (
                   <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/jobs/${job.id}`)}>
@@ -119,12 +109,17 @@ export default function Errors() {
                   </tr>
                 ))}
               </tbody>
+              )}
             </table>
           )}
         </div>
 
         <div className="list-footer">
-          <span>Rows {page * PAGE_SIZE + 1} to {page * PAGE_SIZE + jobs.length}</span>
+          <span>
+            {total > 0
+              ? `Rows ${page * PAGE_SIZE + 1} to ${Math.min((page + 1) * PAGE_SIZE, total)} of ${total}`
+              : 'No rows'}
+          </span>
           <div className="pager">
             <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>‹</button>
             <span>Page {page + 1}</span>

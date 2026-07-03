@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Settings, Search, HelpCircle } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { Search, HelpCircle } from 'lucide-react';
+import { useState, useRef, useEffect, Component } from 'react';
+import type { ReactNode } from 'react';
 import { ToastProvider } from './lib/toast';
 import { AuthProvider, useAuth } from './lib/auth';
+import { jobIdDisplay } from './lib/format';
 import NotificationPanel from './components/NotificationPanel';
 import Dashboard from './pages/Dashboard';
 import Jobs from './pages/Jobs';
@@ -20,6 +22,39 @@ import TeamManagement from './pages/TeamManagement';
 import Login from './pages/Login';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 48, textAlign: 'center', color: '#1a2f38' }}>
+          <h2 style={{ color: '#b42318', marginBottom: 8 }}>Something went wrong</h2>
+          <p style={{ color: '#697a82', fontSize: 13, marginBottom: 20 }}>
+            {this.state.error?.message ?? 'An unexpected error occurred'}
+          </p>
+          <button
+            className="sn-btn"
+            onClick={() => this.setState({ hasError: false, error: null })}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Nav data ────────────────────────────────────────────────────────────────
 
@@ -40,15 +75,6 @@ const LIST_ITEMS = [
   { to: '/blog-drafts',       label: 'Blog Drafts',           perm: 'blog-drafts:manage'        },
 ];
 
-const ALL_TAB_ROUTES = [
-  { to: '/',        label: 'Dashboard',     perm: null             },
-  { to: '/jobs',    label: 'Jobs',          perm: null             },
-  { to: '/trigger', label: 'Trigger Agent', perm: '__canTrigger__' },
-  { to: '/reviews', label: 'Review Queue',  perm: 'jobs:review'    },
-  { to: '/team',    label: 'My Team',       perm: '__isManager__'  },
-  { to: '/admin',   label: 'Admin',         perm: 'admin:users'    },
-];
-
 function SideNavItem({ to, label }: { to: string; label: string }) {
   return (
     <NavLink to={to} end className={({ isActive }) => `app-link${isActive ? ' active' : ''}`}>
@@ -65,17 +91,7 @@ function Rail() {
       <button className="rail-btn active" title="Main">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
-      <button className="rail-btn" title="Favorites — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.1 8.3 22 9.3 17 14.2 18.2 21 12 17.8 5.8 21 7 14.2 2 9.3 8.9 8.3 12 2"/></svg>
-      </button>
-      <button className="rail-btn" title="History — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>
-      </button>
-      <button className="rail-btn" title="Workspaces — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      </button>
       <div className="rail-spacer" />
-      <button className="rail-btn" title="Settings — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}><Settings size={18} /></button>
       <div className="rail-avatar">MI</div>
     </aside>
   );
@@ -84,7 +100,6 @@ function Rail() {
 // ─── AppNav ───────────────────────────────────────────────────────────────────
 function AppNav({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const [filter, setFilter]   = useState('');
-  const [navTab, setNavTab]   = useState<'all' | 'favorites'>('all');
   const { hasPermission, isManagerInGroup, myGroups } = useAuth();
 
   const canTrigger = hasPermission('agents:trigger:seo-analyzer') || hasPermission('agents:trigger:blog-reviewer');
@@ -122,10 +137,6 @@ function AppNav({ open, onToggle }: { open: boolean; onToggle: () => void }) {
             value={filter}
             onChange={e => setFilter(e.target.value)}
           />
-        </div>
-        <div className="nav-tabs">
-          <button className={`nav-tab${navTab === 'all' ? ' active' : ''}`} onClick={() => setNavTab('all')}>All</button>
-          <button className="nav-tab" title="Favorites — coming soon" style={{ opacity: 0.4, cursor: 'not-allowed' }}>Favorites</button>
         </div>
       </div>
 
@@ -231,12 +242,6 @@ function Header({ onNavToggle }: { onNavToggle: () => void }) {
     <header className="sn-header">
       <div className="global-menu">
         <a className="active" style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>All</a>
-        {['Favorites', 'History', 'Workspaces'].map(tab => (
-          <a key={tab} title={`${tab} — coming soon`}
-            style={{ cursor: 'not-allowed', opacity: 0.45 }}>
-            {tab}
-          </a>
-        ))}
       </div>
       <div className="workspace-pill">
         <span className="dot" />
@@ -270,47 +275,71 @@ function Header({ onNavToggle }: { onNavToggle: () => void }) {
 }
 
 // ─── WorkspaceTabs ────────────────────────────────────────────────────────────
-// Permanent tabs have NO × button. Only the dynamic job-detail tab is closeable.
+// Browser-style workspace tabs: Dashboard is pinned; every other visited page
+// opens a tab with a × close button. Open tabs survive reload via sessionStorage.
+
+function tabLabelFor(pathname: string): string | null {
+  if (pathname === '/')                     return 'Dashboard';
+  if (pathname === '/jobs')                 return 'Jobs';
+  if (pathname === '/jobs/active')          return 'Active Runs';
+  if (pathname.startsWith('/jobs/'))        return jobIdDisplay(pathname.split('/')[2] ?? '');
+  if (pathname === '/trigger')              return 'Trigger Agent';
+  if (pathname === '/errors')               return 'Errors';
+  if (pathname === '/reviews')              return 'Review Queue';
+  if (pathname === '/agents/seo')           return 'SEO Analyzer';
+  if (pathname === '/agents/blog-reviewer') return 'Blog Reviewer';
+  if (pathname === '/blog-drafts')          return 'Blog Drafts';
+  if (pathname === '/team')                 return 'My Team';
+  if (pathname === '/admin')                return 'Admin';
+  return null;
+}
+
+type WsTab = { path: string; label: string };
+
 function WorkspaceTabs() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { hasPermission, isManagerInGroup, myGroups } = useAuth();
-  const isJobDetail = pathname.startsWith('/jobs/') && pathname !== '/jobs' && pathname !== '/jobs/active';
-  const jobId = isJobDetail ? pathname.split('/')[2] : null;
-
-  const canTrigger   = hasPermission('agents:trigger:seo-analyzer') || hasPermission('agents:trigger:blog-reviewer');
-  const isAnyManager = myGroups.some(g => isManagerInGroup(g));
-  const TAB_ROUTES = ALL_TAB_ROUTES.filter(item => {
-    if (item.perm === '__canTrigger__') return canTrigger;
-    if (item.perm === '__isManager__')  return isAnyManager;
-    if (item.perm) return hasPermission(item.perm);
-    return true;
+  const [tabs, setTabs] = useState<WsTab[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('mi_tabs');
+      if (saved) return JSON.parse(saved) as WsTab[];
+    } catch { /* corrupt storage — start fresh */ }
+    return [];
   });
+
+  useEffect(() => {
+    const label = tabLabelFor(pathname);
+    if (!label || pathname === '/') return;
+    setTabs(t => t.some(x => x.path === pathname) ? t : [...t, { path: pathname, label }]);
+  }, [pathname]);
+
+  useEffect(() => {
+    sessionStorage.setItem('mi_tabs', JSON.stringify(tabs));
+  }, [tabs]);
+
+  function closeTab(path: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const idx = tabs.findIndex(t => t.path === path);
+    const next = tabs.filter(t => t.path !== path);
+    setTabs(next);
+    // Closing the active tab moves focus to its left neighbour, or Dashboard.
+    if (pathname === path) {
+      navigate(next.length ? next[Math.max(0, idx - 1)].path : '/');
+    }
+  }
 
   return (
     <div className="workspace-tabs">
-      {TAB_ROUTES.map(({ to, label }) => {
-        const exact = to === '/';
-        const active = exact ? pathname === '/' : !isJobDetail && pathname.startsWith(to);
-        return (
-          <NavLink key={to} to={to} className={`ws-tab${active ? ' active' : ''}`}>
-            {label}
-          </NavLink>
-        );
-      })}
-
-      {/* Dynamic job detail tab — closeable */}
-      {isJobDetail && jobId && (
-        <span className="ws-tab active">
-          {jobId.replace('job-', 'J-').toUpperCase()}
-          <span
-            className="close"
-            onClick={e => { e.preventDefault(); e.stopPropagation(); navigate('/jobs'); }}
-            title="Close tab">
-            ×
-          </span>
-        </span>
-      )}
+      <NavLink to="/" className={`ws-tab${pathname === '/' ? ' active' : ''}`} title="Dashboard is pinned">
+        Dashboard
+      </NavLink>
+      {tabs.map(({ path, label }) => (
+        <NavLink key={path} to={path} className={`ws-tab${pathname === path ? ' active' : ''}`}>
+          {label}
+          <span className="close" onClick={e => closeTab(path, e)} title="Close tab">×</span>
+        </NavLink>
+      ))}
     </div>
   );
 }
@@ -327,20 +356,22 @@ function AppShell() {
         <Header onNavToggle={() => setNavOpen(o => !o)} />
         <WorkspaceTabs />
         <main className="sn-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/jobs" element={<Jobs />} />
-            <Route path="/jobs/active" element={<ActiveRuns />} />
-            <Route path="/jobs/:id" element={<JobDetail />} />
-            <Route path="/trigger" element={<Trigger />} />
-            <Route path="/errors" element={<Errors />} />
-            <Route path="/reviews" element={<ReviewQueue />} />
-            <Route path="/agents/seo" element={<SeoAnalyzerJobs />} />
-            <Route path="/agents/blog-reviewer" element={<BlogReviewerJobs />} />
-            <Route path="/blog-drafts" element={<BlogDrafts />} />
-            <Route path="/team" element={<TeamManagement />} />
-            <Route path="/admin" element={<Admin />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/jobs" element={<Jobs />} />
+              <Route path="/jobs/active" element={<ActiveRuns />} />
+              <Route path="/jobs/:id" element={<JobDetail />} />
+              <Route path="/trigger" element={<Trigger />} />
+              <Route path="/errors" element={<Errors />} />
+              <Route path="/reviews" element={<ReviewQueue />} />
+              <Route path="/agents/seo" element={<SeoAnalyzerJobs />} />
+              <Route path="/agents/blog-reviewer" element={<BlogReviewerJobs />} />
+              <Route path="/blog-drafts" element={<BlogDrafts />} />
+              <Route path="/team" element={<TeamManagement />} />
+              <Route path="/admin" element={<Admin />} />
+            </Routes>
+          </ErrorBoundary>
         </main>
       </section>
     </div>

@@ -3,6 +3,8 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useToast } from '../lib/toast';
+import { agentLabel, timeAgo } from '../lib/format';
 
 const STATUS_LABEL: Record<string, string> = {
   pending_review: 'Pending Review',
@@ -31,22 +33,10 @@ const STATUS_BG: Record<string, string> = {
   needs_changes:  '#fff7ed',
 };
 
-function agentLabel(name: string) {
-  const map: Record<string, string> = { 'seo-analyzer': 'SEO Analyzer', 'blog-reviewer': 'Existing Blog Reviewer' };
-  return map[name] ?? name;
-}
-
-function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)   return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
 export default function ReviewQueue() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const { user, hasPermission, isManagerInGroup } = useAuth();
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -61,6 +51,12 @@ export default function ReviewQueue() {
   const claimMutation = useMutation({
     mutationFn: (jobId: string) => api.claimReview(jobId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reviews'] }),
+    // e.g. 409 when another reviewer claimed it first — show why, then refetch
+    // so the stale Claim button disappears.
+    onError: (err: Error) => {
+      toast(err.message, 'error');
+      qc.invalidateQueries({ queryKey: ['reviews'] });
+    },
   });
 
   const pendingCount  = reviews.filter(r => r.status === 'pending_review').length;

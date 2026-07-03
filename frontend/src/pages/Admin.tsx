@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, type AdminUser, type AdminGroup, type AuditLog } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useToast } from '../lib/toast';
+import ConfirmButton from '../components/ConfirmButton';
 
 export default function Admin() {
   const { hasPermission } = useAuth();
@@ -59,6 +61,7 @@ export default function Admin() {
 // ─── Users panel ─────────────────────────────────────────────────────────────
 function UsersPanel() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [creating, setCreating] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -93,6 +96,7 @@ function UsersPanel() {
     mutationFn: ({ userId, isActive }: { userId: string; isActive: boolean }) =>
       api.setUserActive(userId, isActive),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+    onError: (err: Error) => toast(err.message, 'error'),
   });
 
   const groupMutation = useMutation({
@@ -102,6 +106,7 @@ function UsersPanel() {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       setAssigningId(null);
     },
+    onError: (err: Error) => toast(err.message, 'error'),
   });
 
   return (
@@ -227,10 +232,20 @@ function UserRow({
           <button className="sn-btn" style={{ padding: '3px 10px', fontSize: 11 }} onClick={openAssign}>
             Groups
           </button>
-          <button className="sn-btn" style={{ padding: '3px 10px', fontSize: 11, color: user.isActive ? '#b42318' : '#1f6f35' }}
-            onClick={onToggleActive}>
-            {user.isActive ? 'Deactivate' : 'Activate'}
-          </button>
+          {user.isActive ? (
+            <ConfirmButton
+              style={{ padding: '3px 10px', fontSize: 11, color: '#b42318' }}
+              confirmLabel="Deactivate?"
+              title={`Deactivate ${user.username}`}
+              onConfirm={onToggleActive}>
+              Deactivate
+            </ConfirmButton>
+          ) : (
+            <button className="sn-btn" style={{ padding: '3px 10px', fontSize: 11, color: '#1f6f35' }}
+              onClick={onToggleActive}>
+              Activate
+            </button>
+          )}
         </div>
       </div>
       {isAssigning && (

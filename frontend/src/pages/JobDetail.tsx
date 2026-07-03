@@ -4,6 +4,8 @@ import { useParams, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../lib/toast';
+import { agentLabel, jobIdDisplay } from '../lib/format';
+import { Skeleton } from '../components/Skeleton';
 
 const REVIEW_STATUS_COLOR: Record<string, string> = {
   pending_review: '#f0a500', under_review: '#1a56a4', reviewed: '#6b7280',
@@ -16,6 +18,7 @@ const REVIEW_STATUS_LABEL: Record<string, string> = {
 
 function ReviewPanel({ jobId, jobStatus }: { jobId: string; jobStatus: string }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const { user, hasPermission, isManagerInGroup } = useAuth();
   const [reviewNote, setReviewNote] = useState('');
   const [leadComment, setLeadComment] = useState('');
@@ -30,12 +33,15 @@ function ReviewPanel({ jobId, jobStatus }: { jobId: string; jobStatus: string })
 
   const review = data?.review;
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['review', jobId] }); qc.invalidateQueries({ queryKey: ['reviews'] }); };
+  // On failure (e.g. 409 when someone else claimed first) surface the backend
+  // message and refetch so stale action buttons disappear.
+  const onError = (err: Error) => { toast(err.message, 'error'); invalidate(); };
 
-  const claimMutation    = useMutation({ mutationFn: () => api.claimReview(jobId),    onSuccess: invalidate });
-  const submitMutation   = useMutation({ mutationFn: () => api.submitReview(jobId, reviewNote), onSuccess: () => { invalidate(); setReviewNote(''); } });
-  const approveMutation  = useMutation({ mutationFn: () => api.approveReview(jobId, leadComment || undefined), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); } });
-  const rejectMutation   = useMutation({ mutationFn: () => api.rejectReview(jobId, leadComment || undefined), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); } });
-  const changesMutation  = useMutation({ mutationFn: () => api.needsChanges(jobId, leadComment), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); } });
+  const claimMutation    = useMutation({ mutationFn: () => api.claimReview(jobId),    onSuccess: invalidate, onError });
+  const submitMutation   = useMutation({ mutationFn: () => api.submitReview(jobId, reviewNote), onSuccess: () => { invalidate(); setReviewNote(''); }, onError });
+  const approveMutation  = useMutation({ mutationFn: () => api.approveReview(jobId, leadComment || undefined), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); }, onError });
+  const rejectMutation   = useMutation({ mutationFn: () => api.rejectReview(jobId, leadComment || undefined), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); }, onError });
+  const changesMutation  = useMutation({ mutationFn: () => api.needsChanges(jobId, leadComment), onSuccess: () => { invalidate(); setLeadComment(''); setShowDecidePanel(false); }, onError });
 
   if (jobStatus !== 'done') {
     return <div className="empty">Review available once job completes.</div>;
@@ -178,64 +184,153 @@ function ReviewPanel({ jobId, jobStatus }: { jobId: string; jobStatus: string })
   );
 }
 
-function agentLabel(name: string) {
-  const map: Record<string, string> = { 'seo-analyzer': 'SEO Analyzer', 'blog-reviewer': 'Existing Blog Reviewer' };
-  return map[name] ?? name;
+// Inline markdown: `code`, **bold**, *italic*, ~~strike~~, [text](url).
+// Bold content is parsed recursively so nested italic/code render too.
+function renderInline(text: string, keyPrefix = ''): React.ReactNode[] {
+  const re = /(`[^`]+`)|(\*\*(.+?)\*\*)|(\*([^*\n]+)\*)|(~~(.+?)~~)|(\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))/g;
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const key = `${keyPrefix}${k++}`;
+    if (m[1]) {
+      nodes.push(<code key={key}>{m[1].slice(1, -1)}</code>);
+    } else if (m[3] !== undefined) {
+      nodes.push(<strong key={key}>{renderInline(m[3], `${key}-`)}</strong>);
+    } else if (m[5] !== undefined) {
+      nodes.push(<em key={key}>{m[5]}</em>);
+    } else if (m[7] !== undefined) {
+      nodes.push(<del key={key}>{m[7]}</del>);
+    } else if (m[9] !== undefined) {
+      nodes.push(<a key={key} href={m[10]} target="_blank" rel="noreferrer">{m[9]}</a>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
 }
-
-function jobIdDisplay(id: string) { return id.replace('job-', 'J-').toUpperCase(); }
 
 function MarkdownView({ content }: { content: string }) {
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
   let i = 0;
+  let listType: 'ul' | 'ol' | null = null;
+  let listItems: React.ReactNode[] = [];
+  let tableRows: React.ReactNode[] = [];
+  let keyCount = 0;
+
+  function flushList() {
+    if (!listItems.length) return;
+    const key = `list-${keyCount++}`;
+    elements.push(listType === 'ul' ? <ul key={key}>{listItems}</ul> : <ol key={key}>{listItems}</ol>);
+    listItems = [];
+    listType = null;
+  }
+
+  function flushTable() {
+    if (!tableRows.length) return;
+    elements.push(<table key={`tbl-${keyCount++}`}><tbody>{tableRows}</tbody></table>);
+    tableRows = [];
+  }
 
   while (i < lines.length) {
     const line = lines[i].trimEnd();
 
-    if (line.startsWith('# ')) {
-      elements.push(<h2 key={i}>{line.slice(2)}</h2>);
-    } else if (line.startsWith('## ')) {
-      elements.push(<h2 key={i}>{line.slice(3)}</h2>);
-    } else if (line.startsWith('### ')) {
-      const text = line.slice(4);
-      const calloutMap: Record<string, string> = { '🔴': 'red', '🟡': 'amber', '🔵': 'blue', '🟢': 'green' };
-      const emoji = Object.keys(calloutMap).find(e => text.startsWith(e));
-      if (emoji) {
-        elements.push(<div key={i} className={`callout ${calloutMap[emoji]}`}>{text}</div>);
-      } else {
-        elements.push(<h3 key={i}>{text}</h3>);
-      }
-    } else if (line.startsWith('```')) {
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith('```')) { codeLines.push(lines[i]); i++; }
-      elements.push(<pre key={i}><code>{codeLines.join('\n')}</code></pre>);
-    } else if (line.startsWith('- [ ] ') || line.startsWith('- [x] ')) {
+    if (line.startsWith('- [ ] ') || line.startsWith('- [x] ')) {
+      flushList(); flushTable();
       const checked = line.startsWith('- [x] ');
-      elements.push(<div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0' }}><input type="checkbox" checked={checked} readOnly style={{ accentColor: '#08763c' }} /><span>{line.slice(6)}</span></div>);
-    } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      elements.push(<li key={i}>{line.slice(2)}</li>);
-    } else if (/^\d+\.\s/.test(line)) {
-      elements.push(<li key={i}>{line.replace(/^\d+\.\s/, '')}</li>);
-    } else if (line.startsWith('|') && !line.replace(/[\|\s\-:]/g, '').length) {
-      // skip separator rows
-    } else if (line.startsWith('|')) {
-      const cells = line.split('|').map(c => c.trim()).filter(Boolean);
-      const isHeader = (lines[i + 1] ?? '').startsWith('|--') || (lines[i + 1] ?? '').startsWith('| --');
       elements.push(
-        <tr key={i}>{cells.map((c, ci) => isHeader ? <th key={ci}>{c}</th> : <td key={ci}>{c}</td>)}</tr>
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0' }}>
+          <input type="checkbox" checked={checked} readOnly style={{ accentColor: '#08763c' }} />
+          <span>{renderInline(line.slice(6), `cb${i}-`)}</span>
+        </div>
       );
-    } else if (line.startsWith('---')) {
-      elements.push(<hr key={i} />);
-    } else if (line.startsWith('> ')) {
-      elements.push(<blockquote key={i}>{line.slice(2)}</blockquote>);
-    } else if (line.trim()) {
-      elements.push(<p key={i}>{line}</p>);
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      flushTable();
+      if (listType === 'ol') flushList();
+      listType = 'ul';
+      listItems.push(<li key={i}>{renderInline(line.slice(2), `li${i}-`)}</li>);
+    } else if (/^\d+\.\s/.test(line)) {
+      flushTable();
+      if (listType === 'ul') flushList();
+      listType = 'ol';
+      listItems.push(<li key={i}>{renderInline(line.replace(/^\d+\.\s/, ''), `li${i}-`)}</li>);
+    } else if (line.startsWith('|') && !line.replace(/[\|\s\-:]/g, '').length) {
+      // table separator — skip without flushing
+    } else if (line.startsWith('|')) {
+      flushList();
+      const cells = line.split('|').map(c => c.trim()).filter(Boolean);
+      const nextLine = lines[i + 1] ?? '';
+      const isHeader = nextLine.startsWith('|--') || nextLine.startsWith('| --');
+      tableRows.push(<tr key={i}>{cells.map((c, ci) => isHeader ? <th key={ci}>{renderInline(c, `th${i}-${ci}-`)}</th> : <td key={ci}>{renderInline(c, `td${i}-${ci}-`)}</td>)}</tr>);
+    } else {
+      flushList(); flushTable();
+      if (line.startsWith('# ')) {
+        elements.push(<h1 key={i}>{renderInline(line.slice(2), `h${i}-`)}</h1>);
+      } else if (line.startsWith('## ')) {
+        elements.push(<h2 key={i}>{renderInline(line.slice(3), `h${i}-`)}</h2>);
+      } else if (line.startsWith('### ')) {
+        const text = line.slice(4);
+        const calloutMap: Record<string, string> = { '🔴': 'red', '🟡': 'amber', '🔵': 'blue', '🟢': 'green' };
+        const emoji = Object.keys(calloutMap).find(e => text.startsWith(e));
+        if (emoji) {
+          elements.push(<div key={i} className={`callout ${calloutMap[emoji]}`}>{renderInline(text, `co${i}-`)}</div>);
+        } else {
+          elements.push(<h3 key={i}>{renderInline(text, `h${i}-`)}</h3>);
+        }
+      } else if (line.startsWith('```')) {
+        const codeLines: string[] = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) { codeLines.push(lines[i]); i++; }
+        elements.push(<pre key={i}><code>{codeLines.join('\n')}</code></pre>);
+      } else if (line.startsWith('---')) {
+        elements.push(<hr key={i} />);
+      } else if (line.startsWith('> ')) {
+        elements.push(<blockquote key={i}>{renderInline(line.slice(2), `bq${i}-`)}</blockquote>);
+      } else if (line.trim()) {
+        elements.push(<p key={i}>{renderInline(line, `p${i}-`)}</p>);
+      }
     }
     i++;
   }
+
+  flushList();
+  flushTable();
+
   return <div>{elements}</div>;
+}
+
+function JobDetailSkeleton() {
+  return (
+    <>
+      <div className="crumb-row">
+        <div className="breadcrumb"><NavLink to="/jobs">Jobs</NavLink><span>/</span><Skeleton width={90} /></div>
+      </div>
+      <div className="record-head">
+        <div style={{ flex: 1 }}>
+          <Skeleton width={160} height={12} style={{ marginBottom: 8 }} />
+          <Skeleton width="55%" height={22} style={{ display: 'block', marginBottom: 10 }} />
+          <Skeleton width={240} height={12} />
+        </div>
+        <Skeleton width={80} height={28} />
+      </div>
+      <div className="record-metrics">
+        {[0, 1, 2, 3].map(n => (
+          <div key={n} className="mini-metric">
+            <Skeleton width={70} height={10} style={{ display: 'block', marginBottom: 8 }} />
+            <Skeleton width={54} height={18} />
+          </div>
+        ))}
+      </div>
+      <div className="sn-card" style={{ padding: 20 }}>
+        <Skeleton width="90%" height={13} style={{ display: 'block', marginBottom: 10 }} />
+        <Skeleton width="75%" height={13} style={{ display: 'block', marginBottom: 10 }} />
+        <Skeleton width="85%" height={13} style={{ display: 'block' }} />
+      </div>
+    </>
+  );
 }
 
 export default function JobDetail() {
@@ -246,7 +341,6 @@ export default function JobDetail() {
   const [activeTab, setActiveTab] = useState(
     (location.state as { openReview?: boolean } | null)?.openReview ? 'review' : 'output'
   );
-  const [following, setFollowing] = useState(false);
   const [copying, setCopying] = useState(false);
 
   const { data: job, isLoading, error } = useQuery({
@@ -259,8 +353,16 @@ export default function JobDetail() {
     },
   });
 
-  if (isLoading) return <div className="empty">Loading...</div>;
-  if (error || !job) return <div className="empty">Record not found.</div>;
+  if (isLoading) return <JobDetailSkeleton />;
+  if (error || !job) {
+    return (
+      <div className="empty">
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a2f38', marginBottom: 8 }}>Record not found</div>
+        <div style={{ marginBottom: 16 }}>This job may have been removed, or the link is incorrect.</div>
+        <NavLink to="/jobs" className="sn-btn" style={{ display: 'inline-flex' }}>Back to Jobs</NavLink>
+      </div>
+    );
+  }
 
   const notionUrl = job.notionPageId ? `https://notion.so/${job.notionPageId.replace(/-/g, '')}` : null;
   const isRunning = job.status === 'processing' || job.status === 'pending';
@@ -278,11 +380,6 @@ export default function JobDetail() {
     });
   }
 
-  function handleFollow() {
-    setFollowing(f => !f);
-    toast(following ? 'Unfollowed this record' : 'Following this record — you\'ll be notified on changes', 'info');
-  }
-
   function handleRunAgain() {
     navigate('/trigger', { state: { agent: job!.agentName } });
   }
@@ -296,10 +393,6 @@ export default function JobDetail() {
           <strong>{displayId}</strong>
         </div>
         <div className="record-actions">
-          <button className="sn-btn" onClick={handleFollow} style={following ? { borderColor: '#08763c', color: '#08763c' } : {}}>
-            {following ? '★ Following' : '☆ Follow'}
-          </button>
-          <button className="sn-btn" onClick={() => toast('Update panel — coming soon', 'info')}>Update</button>
           <button className="sn-btn sn-btn-primary" onClick={handleRunAgain}>Run again</button>
         </div>
       </div>
@@ -354,12 +447,6 @@ export default function JobDetail() {
             <button className={`tab-btn${activeTab === 'review' ? ' active' : ''}`} onClick={() => setActiveTab('review')}>
               Review
             </button>
-            <button className={`tab-btn${activeTab === 'activity' ? ' active' : ''}`} onClick={() => setActiveTab('activity')}>
-              Activity
-            </button>
-            <button className={`tab-btn${activeTab === 'related' ? ' active' : ''}`} onClick={() => setActiveTab('related')}>
-              Related Records
-            </button>
           </div>
           {activeTab === 'output' && (
             <div className="md">
@@ -367,7 +454,14 @@ export default function JobDetail() {
                 ? <MarkdownView content={job.results[0].content} />
                 : <div className="empty">
                     {job.status === 'done'
-                      ? 'Analysis written to Notion — no local copy stored for this job.'
+                      ? <>
+                          <div style={{ marginBottom: 10 }}>The full analysis was written to the linked Notion page.</div>
+                          {notionUrl && (
+                            <a href={notionUrl} target="_blank" rel="noreferrer" className="sn-btn" style={{ display: 'inline-flex' }}>
+                              Open analysis in Notion ↗
+                            </a>
+                          )}
+                        </>
                       : 'Output will appear once the job completes.'}
                   </div>
               }
@@ -375,18 +469,6 @@ export default function JobDetail() {
           )}
           {activeTab === 'review' && id && (
             <ReviewPanel jobId={id} jobStatus={job.status} />
-          )}
-          {activeTab === 'activity' && (
-            <div className="empty">
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-              Activity log — coming in a future update.
-            </div>
-          )}
-          {activeTab === 'related' && (
-            <div className="empty">
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🔗</div>
-              No related records found.
-            </div>
           )}
         </div>
 
