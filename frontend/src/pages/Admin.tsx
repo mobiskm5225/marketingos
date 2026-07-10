@@ -4,10 +4,11 @@ import { api, type AdminUser, type AdminGroup, type AuditLog } from '../lib/api'
 import { useAuth } from '../lib/auth';
 import { useToast } from '../lib/toast';
 import ConfirmButton from '../components/ConfirmButton';
+import DesignSystemPanel from '../components/DesignSystemPanel';
 
 export default function Admin() {
   const { hasPermission } = useAuth();
-  const [tab, setTab] = useState<'users' | 'audit'>('users');
+  const [tab, setTab] = useState<'users' | 'audit' | 'design'>('users');
 
   if (!hasPermission('admin:users') && !hasPermission('*')) {
     return (
@@ -33,14 +34,14 @@ export default function Admin() {
         </div>
       </div>
       <div style={{ padding: '0 20px', marginBottom: 16, display: 'flex', gap: 0, borderBottom: '2px solid #e8edf0' }}>
-        {(['users', 'audit'] as const).map(t => (
+        {(['users', 'audit', 'design'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: 'none', border: 'none', padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
             color: tab === t ? 'var(--sn-accent)' : '#697a82',
             borderBottom: tab === t ? '2px solid var(--sn-accent)' : '2px solid transparent',
             marginBottom: -2,
           }}>
-            {t === 'users' ? 'Users & Groups' : 'Audit Log'}
+            {t === 'users' ? 'Users & Groups' : t === 'audit' ? 'Audit Log' : 'Design System'}
           </button>
         ))}
       </div>
@@ -49,9 +50,13 @@ export default function Admin() {
           <UsersPanel />
           <GroupsPanel />
         </div>
-      ) : (
+      ) : tab === 'audit' ? (
         <div style={{ padding: '0 20px 20px' }}>
           <AuditPanel />
+        </div>
+      ) : (
+        <div style={{ padding: '0 20px 20px' }}>
+          <DesignSystemPanel />
         </div>
       )}
     </div>
@@ -361,9 +366,11 @@ function AuditPanel() {
   function fmtDate(iso: string) {
     return new Date(iso).toLocaleString();
   }
-  function fmtMeta(raw: string | null) {
-    if (!raw) return '—';
-    try { return JSON.stringify(JSON.parse(raw), null, 0); } catch { return raw; }
+  function fmtMeta(raw: unknown): string {
+    if (raw == null) return '—';
+    // jsonb column — the pg driver returns objects, older rows may be strings
+    if (typeof raw === 'object') return JSON.stringify(raw);
+    try { return JSON.stringify(JSON.parse(String(raw))); } catch { return String(raw); }
   }
 
   return (

@@ -1,0 +1,19 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+  html,body{margin:0;background:#fff;font-family:var(--ace-font-sans);color:var(--ace-fg);}
+  body{padding:24px;}
+  .row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .card{border-radius:12px;padding:16px;border:1px solid var(--ace-border);background:var(--ace-surface);}
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;}
+  .dot{width:10px;height:10px;border-radius:999px;}
+  .name{font-size:12px;font-weight:600;color:var(--ace-fg);margin:12px 0 4px;}
+  .hex{font-family:var(--ace-font-mono);font-size:11px;color:var(--ace-fg-muted);}
+  .label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ace-blue-600);margin:0 0 12px;}
+</style></head><body>
+  <div class="label">Semantic · status colors</div>
+  <div class="row">
+    <div class="card"><span class="pill" style="background:#E6F7ED;color:#00894A;"><span class="dot" style="background:#009C55;"></span>Success</span><div class="name">Success</div><div class="hex">#009C55 / bg #E6F7ED</div></div>
+    <div class="card"><span class="pill" style="background:#EEF3FE;color:#1844C9;"><span class="dot" style="background:#1A4ADB;"></span>Info</span><div class="name">Info</div><div class="hex">#1A4ADB / bg #EEF3FE</div></div>
+    <div class="card"><span class="pill" style="background:#FEF5E1;color:#B47113;"><span class="dot" style="background:#F5A524;"></span>Warning</span><div class="name">Warning</div><div class="hex">#F5A524 / bg #FEF5E1</div></div>
+    <div class="card"><span class="pill" style="background:#FDECEE;color:#B0353A;"><span class="dot" style="background:#E5484D;"></span>Error</span><div class="name">Danger</div><div class="hex">#E5484D / bg #FDECEE</div></div>
+  </div>
+</body></html>

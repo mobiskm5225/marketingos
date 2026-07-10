@@ -79,6 +79,16 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
+// Fetch a protected image as an object URL (img tags can't send JWT headers).
+// Caller must URL.revokeObjectURL() when done.
+export async function fetchImageUrl(path: string): Promise<string> {
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+  if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+  if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'DELETE',
@@ -162,8 +172,21 @@ export interface BlogDraft {
   reviewerName: string | null;
   reviewNote: string | null;
   reviewedAt: string | null;
+  notionPageId: string | null;
+  category: string | null;
+  seoKeywords: string | null;
+  notionStatus: string | null;
+  publicationDate: string | null;
+  lastSeoJobId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BlogDraftSyncResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
 }
 
 export interface AuditLog {
@@ -173,7 +196,32 @@ export interface AuditLog {
   action: string;
   entityType: string | null;
   entityId: string | null;
-  metadata: string | null;
+  metadata: string | Record<string, unknown> | null;   // jsonb — arrives as object
+  createdAt: string;
+}
+
+// ─── LinkedIn types ───────────────────────────────────────────────────────────
+
+export interface LinkedinPost {
+  id: string;
+  title: string | null;
+  content: string;
+  source: string | null;
+  status: 'pending' | 'generating' | 'done' | 'error';
+  errorMessage: string | null;
+  lastJobId: string | null;
+  creativeCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LinkedinCreative {
+  id: string;
+  variant: number;
+  concept: string | null;
+  imagePrompt: string | null;
+  caption: string | null;
+  costUsd: string | null;
   createdAt: string;
 }
 
@@ -257,6 +305,63 @@ export const api = {
   getBlogDraft:    (id: string) => get<{ draft: BlogDraft }>(`/blog-drafts/${id}`),
   updateBlogDraft: (id: string, body: { status?: string; reviewNote?: string }) =>
     apiPatch<{ draft: BlogDraft }>(`/blog-drafts/${id}`, body),
+  syncBlogDrafts:  () => apiPost<BlogDraftSyncResult>('/blog-drafts/sync', {}),
+  analyzeBlogDraft: (id: string) => apiPost<{ jobId: string; status: string }>(`/blog-drafts/${id}/analyze`, {}),
+
+  // Settings (design system)
+  getThemeSettings: () => get<{ theme: Record<string, unknown> | null; updatedBy?: string; updatedAt?: string }>('/settings/theme'),
+  saveThemeSettings: (theme: object | null) => {
+    return fetch(`${BASE}/settings/theme`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ theme }),
+    }).then(async res => {
+      if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error ?? 'Request failed');
+      }
+      return res.json() as Promise<{ ok: boolean }>;
+    });
+  },
+
+  saveLogo: (b64: string, mime: string) => {
+    return fetch(`${BASE}/settings/logo`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ b64, mime }),
+    }).then(async res => {
+      if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error ?? 'Upload failed');
+      }
+      return res.json() as Promise<{ ok: boolean }>;
+    });
+  },
+  deleteLogo: () => apiDelete<{ ok: boolean }>('/settings/logo'),
+
+  getFigmaSettings:  () => get<{ configured: boolean; fileKey: string | null }>('/settings/figma'),
+  saveFigmaSettings: (token: string, fileKey: string) => {
+    return fetch(`${BASE}/settings/figma`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ token, fileKey }),
+    }).then(async res => {
+      if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error ?? 'Request failed');
+      }
+      return res.json() as Promise<{ ok: boolean }>;
+    });
+  },
+  exportToFigma: () => apiPost<{ ok: boolean; variables: number; replaced: boolean }>('/settings/figma-export', {}),
+
+  // LinkedIn creatives
+  getLinkedinPosts: () => get<{ posts: LinkedinPost[] }>('/linkedin/posts'),
+  getLinkedinPost:  (id: string) => get<{ post: LinkedinPost; creatives: LinkedinCreative[] }>(`/linkedin/posts/${id}`),
+  generateLinkedinCreatives: (id: string) => apiPost<{ jobId: string; status: string }>(`/linkedin/posts/${id}/generate`, {}),
 
   // Audit
   getAuditLogs:    (params?: { limit?: number; offset?: number; action?: string; username?: string }) => {

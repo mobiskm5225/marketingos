@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, Component } from 'react';
 import type { ReactNode } from 'react';
 import { ToastProvider } from './lib/toast';
 import { AuthProvider, useAuth } from './lib/auth';
+import { ThemeProvider, useTheme } from './lib/theme';
 import { jobIdDisplay } from './lib/format';
 import NotificationPanel from './components/NotificationPanel';
 import Dashboard from './pages/Dashboard';
@@ -18,6 +19,7 @@ import ReviewQueue from './pages/ReviewQueue';
 import SeoAnalyzerJobs from './pages/SeoAnalyzerJobs';
 import BlogReviewerJobs from './pages/BlogReviewerJobs';
 import BlogDrafts from './pages/BlogDrafts';
+import LinkedinCreatives from './pages/LinkedinCreatives';
 import TeamManagement from './pages/TeamManagement';
 import Login from './pages/Login';
 
@@ -73,6 +75,7 @@ const LIST_ITEMS = [
   { to: '/agents/seo',        label: 'SEO Analyzer',          perm: 'agents:trigger:seo-analyzer' },
   { to: '/agents/blog-reviewer', label: 'Existing Blog Reviewer', perm: 'agents:trigger:blog-reviewer' },
   { to: '/blog-drafts',       label: 'Blog Drafts',           perm: 'blog-drafts:manage'        },
+  { to: '/linkedin',          label: 'LinkedIn Creatives',    perm: null                        },
 ];
 
 function SideNavItem({ to, label }: { to: string; label: string }) {
@@ -85,9 +88,10 @@ function SideNavItem({ to, label }: { to: string; label: string }) {
 
 // ─── Rail ────────────────────────────────────────────────────────────────────
 function Rail() {
+  const { theme } = useTheme();
   return (
     <aside className="sn-rail">
-      <div className="sn-mark">a</div>
+      <div className="sn-mark">{theme.markLetter}</div>
       <button className="rail-btn active" title="Main">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
@@ -126,7 +130,7 @@ function AppNav({ open, onToggle }: { open: boolean; onToggle: () => void }) {
         <button className="hamburger" onClick={onToggle}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
-        <div className="nav-title">Marketing Intelligence OS<small>Configurable Workspace</small></div>
+        <div className="nav-title">{useTheme().theme.workspaceName}<small>Configurable Workspace</small></div>
       </div>
 
       <div className="nav-search">
@@ -245,7 +249,7 @@ function Header({ onNavToggle }: { onNavToggle: () => void }) {
       </div>
       <div className="workspace-pill">
         <span className="dot" />
-        <span>Marketing Intelligence OS</span>
+        <span>{useTheme().theme.workspaceName}</span>
       </div>
       <div className="global-search">
         <Search size={15} />
@@ -289,6 +293,7 @@ function tabLabelFor(pathname: string): string | null {
   if (pathname === '/agents/seo')           return 'SEO Analyzer';
   if (pathname === '/agents/blog-reviewer') return 'Blog Reviewer';
   if (pathname === '/blog-drafts')          return 'Blog Drafts';
+  if (pathname === '/linkedin')             return 'LinkedIn Creatives';
   if (pathname === '/team')                 return 'My Team';
   if (pathname === '/admin')                return 'Admin';
   return null;
@@ -368,6 +373,7 @@ function AppShell() {
               <Route path="/agents/seo" element={<SeoAnalyzerJobs />} />
               <Route path="/agents/blog-reviewer" element={<BlogReviewerJobs />} />
               <Route path="/blog-drafts" element={<BlogDrafts />} />
+              <Route path="/linkedin" element={<LinkedinCreatives />} />
               <Route path="/team" element={<TeamManagement />} />
               <Route path="/admin" element={<Admin />} />
             </Routes>
@@ -404,9 +410,11 @@ export default function App() {
     <QueryClientProvider client={qc}>
       <BrowserRouter>
         <AuthProvider>
-          <ToastProvider>
-            <ProtectedApp />
-          </ToastProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <ProtectedApp />
+            </ToastProvider>
+          </ThemeProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

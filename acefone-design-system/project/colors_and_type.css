@@ -1,0 +1,262 @@
+/* ============================================================
+   Acefone Design System · Colors & Type
+   Brand: Trusted Clarity. Warm enough for CX, authoritative enough for IT.
+   ============================================================ */
+
+/* ---------- Fonts ----------
+   Primary typeface: Poppins (Google Fonts).
+   Fallback stack matches Poppins geometry so things don't reflow if it fails to load.
+*/
+@import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap");
+
+:root {
+  /* ========= CORE BLUE RAMP ========= */
+  /* Dominant brand color. Use -600 as the workhorse primary. */
+  --ace-blue-50:  #EEF3FE;
+  --ace-blue-100: #D6E0FB;
+  --ace-blue-200: #A8BCF5;
+  --ace-blue-300: #6E8BEC;
+  --ace-blue-400: #3A5DE8;
+  --ace-blue-500: #1E4AE2;
+  --ace-blue-600: #083DDE; /* sampled from logo · PRIMARY */
+  --ace-blue-700: #0634C4;
+  --ace-blue-800: #052BA8;
+  --ace-blue-900: #0A2080;
+  --ace-blue-950: #051441; /* primary TEXT color (Dark Blue) */
+
+  /* ========= ACCENT GREEN RAMP ========= */
+  /* Used sparingly: success, positive stats, confirm CTAs. */
+  --ace-green-50:  #E6F7ED;
+  --ace-green-100: #BFEBD0;
+  --ace-green-200: #80D6A1;
+  --ace-green-300: #33BE74;
+  --ace-green-400: #2AC55F;
+  --ace-green-500: #00AB40; /* sampled from logo · PRIMARY accent */
+  --ace-green-600: #028934;
+  --ace-green-700: #00712A;
+  --ace-green-800: #005A21;
+  --ace-green-900: #003D16;
+
+  /* ========= NEUTRALS ========= */
+  /* Cool-neutral grays, biased slightly toward the brand blue to avoid mud. */
+  --ace-white:   #FFFFFF;
+  --ace-gray-50:  #F7F8FB;
+  --ace-gray-100: #EEF0F5;
+  --ace-gray-200: #DDE1EB;
+  --ace-gray-300: #C3C9D8;
+  --ace-gray-400: #9BA3B8;
+  --ace-gray-500: #6E7690;
+  --ace-gray-600: #4D5570;
+  --ace-gray-700: #373E56;
+  --ace-gray-800: #222840;
+  --ace-gray-900: #0F1530;
+
+  /* ========= SEMANTIC ========= */
+  --ace-success: var(--ace-green-500);
+  --ace-success-bg: var(--ace-green-50);
+  --ace-warning: #F5A524;
+  --ace-warning-bg: #FEF5E1;
+  --ace-danger:  #E5484D;
+  --ace-danger-bg: #FDECEE;
+  --ace-info:    var(--ace-blue-500);
+  --ace-info-bg: var(--ace-blue-50);
+
+  /* ========= SURFACES & TEXT ========= */
+  --ace-bg:          var(--ace-white);
+  --ace-bg-subtle:   var(--ace-gray-50);
+  --ace-bg-muted:    var(--ace-gray-100);
+  --ace-surface:     var(--ace-white);
+  --ace-surface-alt: var(--ace-gray-50);
+
+  --ace-fg:          var(--ace-blue-950); /* body text sits on Dark Blue, per guide */
+  --ace-fg-strong:   #020B2A;
+  --ace-fg-muted:    var(--ace-gray-600);
+  --ace-fg-subtle:   var(--ace-gray-500);
+  --ace-fg-on-blue:  var(--ace-white);
+  --ace-fg-on-green: var(--ace-white);
+
+  --ace-border:        var(--ace-gray-200);
+  --ace-border-strong: var(--ace-gray-300);
+  --ace-border-focus:  var(--ace-blue-500);
+
+  /* Brand gradients (used in hero grids, CTAs) */
+  --ace-grad-primary: linear-gradient(135deg, #1A4ADB 0%, #1338A4 100%);
+  --ace-grad-deep:    linear-gradient(180deg, #051441 0%, #0D2A7C 55%, #1338A4 100%);
+  --ace-grad-subtle:  linear-gradient(180deg, #FFFFFF 0%, #EEF3FE 100%);
+  --ace-grad-accent:  linear-gradient(135deg, #00B060 0%, #007540 100%);
+
+  /* ========= TYPOGRAPHY ========= */
+  --ace-font-sans: "Poppins", "Inter", system-ui, -apple-system, "Segoe UI",
+                    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ace-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Type scale — 1.200 ratio, clamped for responsive display */
+  --ace-text-xs:   12px;
+  --ace-text-sm:   14px;
+  --ace-text-base: 16px;
+  --ace-text-md:   18px;
+  --ace-text-lg:   20px;
+  --ace-text-xl:   24px;
+  --ace-text-2xl:  30px;
+  --ace-text-3xl:  38px;
+  --ace-text-4xl:  48px;
+  --ace-text-5xl:  60px;
+  --ace-text-6xl:  76px;
+
+  --ace-weight-light:    300;
+  --ace-weight-regular:  400;
+  --ace-weight-medium:   500;
+  --ace-weight-semibold: 600;
+  --ace-weight-bold:     700;
+  --ace-weight-black:    800;
+
+  --ace-leading-tight:   1.1;
+  --ace-leading-snug:    1.25;
+  --ace-leading-normal:  1.5;
+  --ace-leading-relaxed: 1.65;
+
+  --ace-tracking-tight:   -0.02em;
+  --ace-tracking-snug:    -0.01em;
+  --ace-tracking-normal:  0;
+  --ace-tracking-wide:    0.04em;
+  --ace-tracking-caps:    0.08em;
+
+  /* ========= SPACING ========= */
+  --ace-space-0:  0;
+  --ace-space-1:  4px;
+  --ace-space-2:  8px;
+  --ace-space-3:  12px;
+  --ace-space-4:  16px;
+  --ace-space-5:  20px;
+  --ace-space-6:  24px;
+  --ace-space-8:  32px;
+  --ace-space-10: 40px;
+  --ace-space-12: 48px;
+  --ace-space-16: 64px;
+  --ace-space-20: 80px;
+  --ace-space-24: 96px;
+  --ace-space-32: 128px;
+
+  /* ========= RADII ========= */
+  --ace-radius-xs:  4px;
+  --ace-radius-sm:  6px;
+  --ace-radius-md:  10px;
+  --ace-radius-lg:  14px;
+  --ace-radius-xl:  20px;
+  --ace-radius-2xl: 28px;
+  --ace-radius-pill: 999px;
+
+  /* ========= SHADOWS ========= */
+  --ace-shadow-xs: 0 1px 2px rgba(5, 20, 65, 0.05);
+  --ace-shadow-sm: 0 2px 6px rgba(5, 20, 65, 0.06), 0 1px 2px rgba(5, 20, 65, 0.04);
+  --ace-shadow-md: 0 6px 16px rgba(5, 20, 65, 0.08), 0 2px 4px rgba(5, 20, 65, 0.04);
+  --ace-shadow-lg: 0 16px 36px rgba(5, 20, 65, 0.12), 0 4px 10px rgba(5, 20, 65, 0.06);
+  --ace-shadow-xl: 0 28px 60px rgba(5, 20, 65, 0.18), 0 8px 20px rgba(5, 20, 65, 0.08);
+  --ace-shadow-focus: 0 0 0 4px rgba(24, 68, 201, 0.22);
+  --ace-shadow-glow-blue: 0 18px 48px rgba(24, 68, 201, 0.32);
+  --ace-shadow-glow-green: 0 18px 48px rgba(0, 137, 74, 0.28);
+
+  /* ========= MOTION ========= */
+  --ace-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ace-ease-in:       cubic-bezier(0.4, 0, 1, 1);
+  --ace-ease-out:      cubic-bezier(0, 0, 0.2, 1);
+  --ace-dur-fast:  140ms;
+  --ace-dur-med:   240ms;
+  --ace-dur-slow:  420ms;
+
+  /* ========= LAYOUT ========= */
+  --ace-container-narrow: 880px;
+  --ace-container:        1200px;
+  --ace-container-wide:   1440px;
+}
+
+/* ============================================================
+   Semantic element styles (apply to raw tags within a .ace-type scope)
+   ============================================================ */
+.ace-type, .ace-type * {
+  font-family: var(--ace-font-sans);
+  color: var(--ace-fg);
+}
+
+.ace-type {
+  font-size: var(--ace-text-base);
+  line-height: var(--ace-leading-normal);
+  font-weight: var(--ace-weight-regular);
+}
+
+.ace-type h1, .ace-h1 {
+  font-size: clamp(40px, 5.2vw, var(--ace-text-6xl));
+  font-weight: var(--ace-weight-bold);
+  line-height: var(--ace-leading-tight);
+  letter-spacing: var(--ace-tracking-tight);
+  color: var(--ace-blue-950);
+  margin: 0 0 var(--ace-space-5);
+}
+.ace-type h2, .ace-h2 {
+  font-size: clamp(30px, 3.6vw, var(--ace-text-4xl));
+  font-weight: var(--ace-weight-semibold);
+  line-height: var(--ace-leading-snug);
+  letter-spacing: var(--ace-tracking-snug);
+  color: var(--ace-blue-950);
+  margin: 0 0 var(--ace-space-4);
+}
+.ace-type h3, .ace-h3 {
+  font-size: var(--ace-text-2xl);
+  font-weight: var(--ace-weight-semibold);
+  line-height: var(--ace-leading-snug);
+  color: var(--ace-blue-950);
+  margin: 0 0 var(--ace-space-3);
+}
+.ace-type h4, .ace-h4 {
+  font-size: var(--ace-text-xl);
+  font-weight: var(--ace-weight-semibold);
+  line-height: var(--ace-leading-snug);
+  color: var(--ace-blue-950);
+  margin: 0 0 var(--ace-space-3);
+}
+.ace-type h5, .ace-h5 {
+  font-size: var(--ace-text-lg);
+  font-weight: var(--ace-weight-semibold);
+  line-height: var(--ace-leading-snug);
+  color: var(--ace-blue-950);
+  margin: 0 0 var(--ace-space-2);
+}
+.ace-type p, .ace-p {
+  font-size: var(--ace-text-base);
+  line-height: var(--ace-leading-relaxed);
+  color: var(--ace-fg);
+  margin: 0 0 var(--ace-space-4);
+  text-wrap: pretty;
+}
+.ace-lead {
+  font-size: var(--ace-text-lg);
+  line-height: var(--ace-leading-relaxed);
+  color: var(--ace-fg-muted);
+  font-weight: var(--ace-weight-regular);
+}
+.ace-eyebrow {
+  font-size: var(--ace-text-xs);
+  font-weight: var(--ace-weight-semibold);
+  letter-spacing: var(--ace-tracking-caps);
+  text-transform: uppercase;
+  color: var(--ace-blue-600);
+}
+.ace-stat {
+  font-size: clamp(44px, 6vw, var(--ace-text-6xl));
+  font-weight: var(--ace-weight-bold);
+  line-height: 1;
+  letter-spacing: var(--ace-tracking-tight);
+  color: var(--ace-blue-950);
+}
+.ace-caption {
+  font-size: var(--ace-text-sm);
+  color: var(--ace-fg-muted);
+}
+.ace-code, .ace-type code {
+  font-family: var(--ace-font-mono);
+  font-size: 0.92em;
+  background: var(--ace-gray-100);
+  color: var(--ace-blue-900);
+  padding: 2px 6px;
+  border-radius: var(--ace-radius-xs);
+}

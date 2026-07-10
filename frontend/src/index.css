@@ -1,32 +1,34 @@
+/* Defaults = Acefone Design System (acefone-design-system/project/colors_and_type.css).
+   Overridable at runtime via Admin → Design System. */
 :root {
-  --sn-top: #071d25;
-  --sn-top-2: #102a34;
-  --sn-rail: #082532;
-  --sn-left: #f5f7f8;
-  --sn-left-border: #d8dde2;
-  --sn-bg: #eef1f4;
+  --sn-top: #051441;         /* ace-blue-950 — Dark Blue */
+  --sn-top-2: #0A2080;       /* ace-blue-900 */
+  --sn-rail: #0A2080;        /* ace-blue-900 */
+  --sn-left: #F7F8FB;        /* ace-gray-50 */
+  --sn-left-border: #DDE1EB; /* ace-gray-200 */
+  --sn-bg: #F7F8FB;          /* ace-bg-subtle */
   --sn-panel: #ffffff;
-  --sn-panel-alt: #f7f9fa;
-  --sn-border: #d5dadd;
-  --sn-border-dark: #b8c0c5;
-  --sn-text: #1f2d33;
-  --sn-muted: #5f6f78;
-  --sn-link: #365ec9;
-  --sn-green: #63cc66;
-  --sn-green-dark: #1f6f35;
-  --sn-green-soft: #e8f6e8;
-  --sn-blue: #246bfe;
-  --sn-blue-soft: #e8f0ff;
-  --sn-orange: #a85c00;
-  --sn-orange-soft: #fff2dc;
-  --sn-red: #b42318;
-  --sn-red-soft: #fff0f0;
-  --sn-accent: #08763c;
-  --sn-shadow: 0 1px 2px rgba(0,0,0,.08), 0 10px 30px rgba(18,31,38,.08);
-  --sn-radius: 4px;
-  --sn-radius-lg: 8px;
-  --sn-font: "Source Sans 3","Segoe UI",Roboto,Arial,sans-serif;
-  --sn-mono: "JetBrains Mono","SFMono-Regular",Consolas,monospace;
+  --sn-panel-alt: #F7F8FB;
+  --sn-border: #DDE1EB;      /* ace-gray-200 */
+  --sn-border-dark: #C3C9D8; /* ace-gray-300 */
+  --sn-text: #051441;        /* ace-fg — body text sits on Dark Blue */
+  --sn-muted: #4D5570;       /* ace-gray-600 */
+  --sn-link: #1E4AE2;        /* ace-blue-500 */
+  --sn-green: #00AB40;       /* ace-green-500 — logo accent */
+  --sn-green-dark: #00712A;  /* ace-green-700 */
+  --sn-green-soft: #E6F7ED;  /* ace-green-50 */
+  --sn-blue: #1E4AE2;        /* ace-info */
+  --sn-blue-soft: #EEF3FE;   /* ace-blue-50 */
+  --sn-orange: #9C6500;      /* ace-warning #F5A524 darkened for 4.5:1 text contrast */
+  --sn-orange-soft: #FEF5E1; /* ace-warning-bg */
+  --sn-red: #E5484D;         /* ace-danger */
+  --sn-red-soft: #FDECEE;    /* ace-danger-bg */
+  --sn-accent: #083DDE;      /* ace-blue-600 — PRIMARY, sampled from logo */
+  --sn-shadow: 0 6px 16px rgba(5,20,65,.08), 0 2px 4px rgba(5,20,65,.04);  /* ace-shadow-md */
+  --sn-radius: 4px;          /* ace-radius-xs */
+  --sn-radius-lg: 10px;      /* ace-radius-md */
+  --sn-font: "Poppins","Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --sn-mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -223,8 +225,8 @@ svg { display: block; }
   box-shadow: 0 1px 0 rgba(0,0,0,.03);
 }
 .sn-btn:hover { background: #f4f6f7; border-color: #8f9aa1; }
-.sn-btn-primary { background: #08763c; border-color: #08763c; color: #fff; }
-.sn-btn-primary:hover { background: #0a6a38; border-color: #0a6a38; }
+.sn-btn-primary { background: var(--sn-accent); border-color: var(--sn-accent); color: #fff; }
+.sn-btn-primary:hover { filter: brightness(0.92); }
 .sn-btn-ghost { border-color: transparent; background: transparent; box-shadow: none; color: #38505a; }
 .sn-btn-ghost:hover { background: #e7ecef; border-color: #d1d9dd; }
 .sn-btn:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -409,10 +411,10 @@ table.sn-table { width: 100%; border-collapse: separate; border-spacing: 0; min-
 .sort { display: inline-flex; align-items: center; gap: 5px; }
 .sort::after { content: "▾"; font-size: 10px; color: #7b8a91; }
 .record-link {
-  color: #1d4fb7; font-weight: 700;
-  text-decoration: underline; text-decoration-color: rgba(29,79,183,.25); text-underline-offset: 2px;
+  color: var(--sn-link); font-weight: 700;
+  text-decoration: underline; text-decoration-color: rgba(30,74,226,.25); text-underline-offset: 2px;
 }
-.record-link:hover { color: #003f9e; text-decoration-color: #003f9e; }
+.record-link:hover { color: #0634C4; text-decoration-color: #0634C4; }
 .mono { font-family: var(--sn-mono); font-size: 12px; color: #26363d; }
 .muted { color: #697a82 !important; }
 .tag {
@@ -430,7 +432,7 @@ table.sn-table { width: 100%; border-collapse: separate; border-spacing: 0; min-
 }
 .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .status.done { background: var(--sn-green-soft); color: var(--sn-green-dark); border-color: #cde8cd; }
-.status.processing { background: var(--sn-blue-soft); color: #154bb5; border-color: #c9d9ff; }
+.status.processing { background: var(--sn-blue-soft); color: #0634C4; border-color: #A8BCF5; }
 .status.pending { background: var(--sn-orange-soft); color: var(--sn-orange); border-color: #ffd79a; }
 .status.error { background: var(--sn-red-soft); color: var(--sn-red); border-color: #ffc9c9; }
 .status.lg { height: 28px; font-size: 13px; padding: 0 11px; }

@@ -14,6 +14,8 @@ import adminRouter from './routes/admin';
 import reviewsRouter from './routes/reviews';
 import blogDraftsRouter from './routes/blog-drafts';
 import teamRouter from './routes/team';
+import linkedinRouter from './routes/linkedin';
+import settingsRouter from './routes/settings';
 import log from './logger';
 
 const app = express();
@@ -21,8 +23,10 @@ const PORT = process.env.PORT ?? 8000;
 
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// Parse JSON and capture raw body in one pass (rawBody used for HMAC on /webhook)
+// Parse JSON and capture raw body in one pass (rawBody used for HMAC on /webhook).
+// 4mb limit: logo upload sends base64 image in the JSON body.
 app.use(express.json({
+  limit: '4mb',
   verify: (req: any, _res, buf) => { req.rawBody = buf; },
 }));
 app.use(httpLogger);
@@ -41,6 +45,8 @@ app.use('/api', adminRouter);    // admin routes handle their own requireAuth + 
 app.use('/api', requireAuth, reviewsRouter);
 app.use('/api', blogDraftsRouter);
 app.use('/api', teamRouter);
+app.use('/api', requireAuth, linkedinRouter);
+app.use('/api', requireAuth, settingsRouter);
 
 app.listen(PORT, () => {
   log.info(`Server running on port ${PORT}`);
