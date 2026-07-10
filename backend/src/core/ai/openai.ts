@@ -51,3 +51,39 @@ export async function callOpenAI(
 
   return { text, inputTokens, outputTokens, costUsd };
 }
+
+// gpt-image-2 pricing per 1M tokens (text input $5, image output $30)
+const IMG_PRICE_TEXT_INPUT_PER_M  = 5.0;
+const IMG_PRICE_IMAGE_OUTPUT_PER_M = 30.0;
+
+export interface ImageResult {
+  b64: string;           // PNG, base64
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+export async function generateImage(
+  prompt: string,
+  size: '1024x1024' | '1536x1024' | '1024x1536' = '1536x1024',
+  quality: 'low' | 'medium' | 'high' = 'medium'
+): Promise<ImageResult> {
+  const response = await client.images.generate({
+    model: 'gpt-image-2',
+    prompt,
+    size,
+    quality,
+    n: 1,
+  }) as any;
+
+  const b64 = response.data?.[0]?.b64_json;
+  if (!b64) throw new Error('Image generation returned no data');
+
+  const inputTokens  = response.usage?.input_tokens  ?? 0;
+  const outputTokens = response.usage?.output_tokens ?? 0;
+  const costUsd =
+    (inputTokens / 1_000_000) * IMG_PRICE_TEXT_INPUT_PER_M +
+    (outputTokens / 1_000_000) * IMG_PRICE_IMAGE_OUTPUT_PER_M;
+
+  return { b64, inputTokens, outputTokens, costUsd };
+}

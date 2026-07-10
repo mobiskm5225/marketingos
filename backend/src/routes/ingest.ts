@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
 import { ingestAuth } from '../middleware/auth';
 import { createDatabaseEntry } from '../core/notion/writer';
 import { agentRegistry } from '../registry';
 import { db } from '../core/db';
-import { agentJobs, blogDrafts } from '../core/db/schema';
+import { agentJobs, blogDrafts, linkedinPosts } from '../core/db/schema';
+import { runLinkedinCreatives } from '../agents/linkedin-creatives';
 import log from '../logger';
 
 const router = Router();
@@ -70,6 +72,52 @@ router.post('/ingest/blog-draft', ingestAuth, async (req: Request, res: Response
     res.json({ id: draft.id, title: draft.title, status: draft.status, createdAt: draft.createdAt });
   } catch (err: any) {
     log.error({ err: err.message }, 'Blog draft ingest failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /ingest/linkedin — Claude routines push LinkedIn post content here.
+// Stores the post, then generates creative image variations asynchronously.
+router.post('/ingest/linkedin', ingestAuth, async (req: Request, res: Response) => {
+  const { title, content, source } = req.body ?? {};
+
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    res.status(400).json({ error: 'content is required' });
+    return;
+  }
+
+  try {
+    const [post] = await db
+      .insert(linkedinPosts)
+      .values({
+        title: title ?? null,
+        content: content.trim(),
+        source: source ?? 'claude-routine',
+        status: 'pending',
+      })
+      .returning();
+
+    const [job] = await db
+      .insert(agentJobs)
+      .values({
+        agentName: 'linkedin-creatives',
+        title: title ?? content.trim().slice(0, 120),
+        status: 'pending',
+        source: 'ingest',
+      })
+      .returning();
+
+    await db.update(linkedinPosts).set({ lastJobId: job.id }).where(eq(linkedinPosts.id, post.id));
+
+    log.info({ postId: post.id, jobId: job.id }, 'LinkedIn post ingested');
+    res.json({ status: 'accepted', postId: post.id, jobId: job.id });
+
+    runLinkedinCreatives(post.id, job.id).catch((err: Error) => {
+      log.error({ postId: post.id, jobId: job.id, err: err.message }, 'LinkedIn creatives run failed');
+    });
+
+  } catch (err: any) {
+    log.error({ err: err.message }, 'LinkedIn ingest failed');
     res.status(500).json({ error: err.message });
   }
 });

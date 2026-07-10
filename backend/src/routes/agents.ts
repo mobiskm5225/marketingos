@@ -10,7 +10,7 @@ import log from '../logger';
 
 const router = Router();
 
-const agentTriggerLimiter = rateLimit({
+export const agentTriggerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 20,
   standardHeaders: 'draft-8',
