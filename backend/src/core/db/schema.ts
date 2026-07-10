@@ -100,18 +100,61 @@ export const jobReviews = pgTable('job_reviews', {
 // ─── Blog Drafts ─────────────────────────────────────────────────────────────
 
 export const blogDrafts = pgTable('blog_drafts', {
+  id:            uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  title:         text('title').notNull(),
+  content:       text('content'),
+  url:           text('url'),
+  source:        varchar('source', { length: 100 }).default('api'),
+  status:        varchar('status', { length: 30 }).notNull().default('pending'),
+  reviewerId:    uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
+  reviewerName:  varchar('reviewer_name', { length: 50 }),
+  reviewNote:    text('review_note'),
+  reviewedAt:    timestamp('reviewed_at', { withTimezone: true }),
+  // Notion Blog Tracker sync fields (migration 007)
+  notionPageId:    varchar('notion_page_id', { length: 50 }).unique(),
+  category:        varchar('category', { length: 50 }),
+  seoKeywords:     text('seo_keywords'),
+  notionStatus:    varchar('notion_status', { length: 30 }),
+  publicationDate: timestamp('publication_date', { withTimezone: true }),
+  lastSeoJobId:    uuid('last_seo_job_id').references(() => agentJobs.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+  updatedAt:     timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+// ─── LinkedIn Creatives ──────────────────────────────────────────────────────
+
+export const linkedinPosts = pgTable('linkedin_posts', {
   id:           uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  title:        text('title').notNull(),
-  content:      text('content'),
-  url:          text('url'),
-  source:       varchar('source', { length: 100 }).default('api'),
+  title:        text('title'),
+  content:      text('content').notNull(),
+  source:       varchar('source', { length: 100 }).default('claude-routine'),
   status:       varchar('status', { length: 30 }).notNull().default('pending'),
-  reviewerId:   uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
-  reviewerName: varchar('reviewer_name', { length: 50 }),
-  reviewNote:   text('review_note'),
-  reviewedAt:   timestamp('reviewed_at', { withTimezone: true }),
+  errorMessage: text('error_message'),
+  lastJobId:    uuid('last_job_id').references(() => agentJobs.id, { onDelete: 'set null' }),
   createdAt:    timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
   updatedAt:    timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+export const linkedinCreatives = pgTable('linkedin_creatives', {
+  id:          uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  postId:      uuid('post_id').notNull().references(() => linkedinPosts.id, { onDelete: 'cascade' }),
+  jobId:       uuid('job_id').references(() => agentJobs.id, { onDelete: 'set null' }),
+  variant:     integer('variant').notNull().default(1),
+  concept:     text('concept'),
+  imagePrompt: text('image_prompt'),
+  caption:     text('caption'),
+  imageB64:    text('image_b64'),
+  costUsd:     decimal('cost_usd', { precision: 10, scale: 6 }),
+  createdAt:   timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+// ─── App settings (design system) ────────────────────────────────────────────
+
+export const appSettings = pgTable('app_settings', {
+  key:       varchar('key', { length: 100 }).primaryKey(),
+  value:     text('value').notNull(),
+  updatedBy: varchar('updated_by', { length: 50 }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
 });
 
 // ─── Notifications ────────────────────────────────────────────────────────────

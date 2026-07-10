@@ -192,6 +192,35 @@ export async function createSubpage(
   return page;
 }
 
+export async function archivePage(pageId: string): Promise<void> {
+  await notion.pages.update({ page_id: pageId, archived: true });
+}
+
+// Create a subpage, replacing any previous subpage with the same title under
+// the same parent. Old versions are archived (recoverable from Notion trash) —
+// the parent only ever shows one current copy.
+export async function replaceSubpage(
+  parentPageId: string,
+  title: string,
+  content: string
+): Promise<any> {
+  let cursor: string | undefined;
+  while (true) {
+    const response = await notion.blocks.children.list({
+      block_id: parentPageId,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    for (const block of response.results as any[]) {
+      if (block.type === 'child_page' && block.child_page?.title === title) {
+        await archivePage(block.id);
+      }
+    }
+    if (!response.has_more) break;
+    cursor = response.next_cursor ?? undefined;
+  }
+  return createSubpage(parentPageId, title, content);
+}
+
 export async function createDatabaseEntry(
   databaseId: string,
   title: string,

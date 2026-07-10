@@ -12,11 +12,10 @@ VALUES (
 )
 ON CONFLICT (username) DO NOTHING;
 
+-- Look the user up by username — the row may pre-exist with a different id
+-- (e.g. created via scripts/seed-admin), so the fixed UUID cannot be assumed.
 INSERT INTO user_groups (user_id, group_id, group_role)
-SELECT
-  'a0000000-0000-0000-0000-000000000001',
-  g.id,
-  'manager'
-FROM groups g
-WHERE g.name = 'admins'
+SELECT u.id, g.id, 'manager'
+FROM users u, groups g
+WHERE u.username = 'superuser' AND g.name = 'admins'
 ON CONFLICT (user_id, group_id) DO NOTHING;

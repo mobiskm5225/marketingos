@@ -378,6 +378,32 @@ Rate limit: 20 triggers per hour per authenticated user (keyed on user ID).
 
 ---
 
+## Blog Drafts
+
+### `POST /api/blog-drafts/sync`
+
+Pull every page from the Notion Blog Tracker into `blog_drafts`. Idempotent. Notion status maps to review status (`Published → approved`, `In Review → in_review`, else `pending`); human review decisions are never overwritten. Requires `blog-drafts:manage`.
+
+**Response `200`**
+```json
+{ "total": 28, "created": 0, "updated": 27, "skipped": 1 }
+```
+
+### `POST /api/blog-drafts/:id/analyze`
+
+Run SEO Analyzer on a draft. Result stored in `agent_results` and written as an "SEO Analysis" child page under the draft's Notion tracker row. Requires `agents:trigger:seo-analyzer`. Shares the agent trigger rate limit (20/hour per user).
+
+**Response `200`**
+```json
+{ "jobId": "uuid", "status": "accepted" }
+```
+
+**Response `400`** — draft content under 300 words
+**Response `409`** — an analysis is already running for this draft
+**Response `429`** — trigger rate limit reached
+
+---
+
 ## Job Status Lifecycle
 
 ```

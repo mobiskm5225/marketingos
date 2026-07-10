@@ -143,7 +143,7 @@ Frontend-only pass. Theme colors unchanged.
 
 | # | Layer | Issue | File |
 |---|---|---|---|
-| T1 | `[BE]` | `kb_cache` table created in migration 001, never used anywhere in code | `backend/src/core/db/schema.ts:27` |
+| T1 | `[BE]` | `kb_cache` table created in migration 001, currently unused — **reserved for future Notion Knowledge Base integration** (decision 2026-07-03: not wiring KB yet) | `backend/src/core/db/schema.ts:27` |
 | T2 | `[BE]` | `wireframe-builder/index.ts` + `anthropic.ts` are empty stubs (`export {}`) | `backend/src/agents/wireframe-builder/` `backend/src/core/ai/anthropic.ts` |
 | T3 | `[INFRA]` | `ngrok.exe`, `ngrok.exe.bak`, `.ngrok.exe.old` committed to repo root | repo root |
 | T4 ✅ | `[BE]` | Jobs API response has no `total` count — frontend cannot render "showing X of Y" or disable Next button | `backend/src/routes/jobs.ts:42` — fixed as part of B2. `total` now returned from SQL count query and used in `Jobs.tsx` pagination |

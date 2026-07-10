@@ -1,7 +1,7 @@
 import { db } from '../../core/db';
 import { agentJobs, agentResults } from '../../core/db/schema';
-import { getPageProperties, retrievePage } from '../../core/notion/reader';
-import { createSubpage, updateStatus } from '../../core/notion/writer';
+import { getPageProperties, retrievePage, titleFromPage } from '../../core/notion/reader';
+import { replaceSubpage, updateStatus } from '../../core/notion/writer';
 import { callOpenAI } from '../../core/ai/openai';
 import { crawlUrl } from '../../core/crawler';
 import { createNotification } from '../../core/notifications';
@@ -31,7 +31,13 @@ export async function runBlogReviewer(
     }
 
     await updateStatus(pageId, STATUS_PROP, 'Processing');
-    await db.update(agentJobs).set({ status: 'processing', updatedAt: new Date() }).where(eq(agentJobs.id, jobId));
+    // Backfill job title from the Notion page so listings never show "Untitled"
+    const pageTitle = titleFromPage(page);
+    await db.update(agentJobs).set({
+      status: 'processing',
+      ...(pageTitle ? { title: pageTitle } : {}),
+      updatedAt: new Date(),
+    }).where(eq(agentJobs.id, jobId));
 
     // Get the live blog URL from 'Blog URL' property
     const props = await getPageProperties(pageId);
@@ -68,7 +74,7 @@ ${crawlResult.bodyText.slice(0, 12000)}
     log.info({ pageId }, 'Calling GPT-4o for blog review');
     const result = await callOpenAI(BLOG_REVIEW_SYSTEM_PROMPT, userMessage);
 
-    await createSubpage(pageId, 'SEO Review', result.text);
+    await replaceSubpage(pageId, 'SEO Review', result.text);
     await updateStatus(pageId, STATUS_PROP, 'Done');
 
     await db.update(agentJobs).set({

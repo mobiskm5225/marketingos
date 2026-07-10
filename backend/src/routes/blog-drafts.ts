@@ -1,14 +1,34 @@
 import { Router, Request, Response } from 'express';
 import { eq, desc } from 'drizzle-orm';
 import { db } from '../core/db';
-import { blogDrafts } from '../core/db/schema';
+import { blogDrafts, agentJobs } from '../core/db/schema';
 import { requireAuth } from '../middleware/requireAuth';
 import { requirePermission } from '../middleware/requirePermission';
 import { logAudit } from '../core/audit';
+import { syncBlogTracker } from '../core/blog-tracker-sync';
+import { runSeoAnalyzerForDraft } from '../agents/seo-analyzer';
+import { agentTriggerLimiter } from './agents';
+import log from '../logger';
 
 const router = Router();
 const PERM = 'blog-drafts:manage';
 const VALID_STATUSES = ['pending', 'in_review', 'approved', 'rejected'] as const;
+
+// POST /api/blog-drafts/sync — pull all pages from the Notion Blog Tracker
+router.post('/blog-drafts/sync', requireAuth, requirePermission(PERM), async (req: Request, res: Response) => {
+  try {
+    const result = await syncBlogTracker();
+    await logAudit(
+      req.user!.userId, req.user!.username,
+      'blog-draft.sync', 'blog_draft', undefined,
+      { ...result },
+    );
+    res.json(result);
+  } catch (err: any) {
+    log.error({ err: err.message }, 'Blog Tracker sync failed');
+    res.status(500).json({ error: err.message ?? 'Sync failed' });
+  }
+});
 
 // GET /api/blog-drafts
 router.get('/blog-drafts', requireAuth, requirePermission(PERM), async (req: Request, res: Response) => {
@@ -31,6 +51,72 @@ router.get('/blog-drafts', requireAuth, requirePermission(PERM), async (req: Req
 
   res.json({ drafts: rows });
 });
+
+// POST /api/blog-drafts/:id/analyze — run SEO Analyzer on a draft.
+// Result lands in agent_results + as an "SEO Analysis" child page under the
+// draft's Notion tracker row.
+router.post('/blog-drafts/:id/analyze',
+  requireAuth,
+  requirePermission('agents:trigger:seo-analyzer'),
+  agentTriggerLimiter,
+  async (req: Request, res: Response) => {
+    const id = String(req.params.id);
+    const [draft] = await db.select().from(blogDrafts).where(eq(blogDrafts.id, id)).limit(1);
+    if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
+
+    const wordCount = draft.content ? draft.content.trim().split(/\s+/).length : 0;
+    if (wordCount < 300) {
+      res.status(400).json({ error: `Draft content too short for SEO analysis (${wordCount} words, need 300+). Sync the full draft from Notion first.` });
+      return;
+    }
+
+    // One active analysis per draft
+    if (draft.lastSeoJobId) {
+      const [lastJob] = await db
+        .select({ status: agentJobs.status })
+        .from(agentJobs)
+        .where(eq(agentJobs.id, draft.lastSeoJobId))
+        .limit(1);
+      if (lastJob && (lastJob.status === 'pending' || lastJob.status === 'processing')) {
+        res.status(409).json({ error: 'An SEO analysis is already running for this draft' });
+        return;
+      }
+    }
+
+    try {
+      const [job] = await db
+        .insert(agentJobs)
+        .values({
+          agentName: 'seo-analyzer',
+          notionPageId: draft.notionPageId,
+          title: draft.title,
+          status: 'pending',
+          source: 'blog-draft',
+        })
+        .returning();
+
+      await db.update(blogDrafts)
+        .set({ lastSeoJobId: job.id, updatedAt: new Date() })
+        .where(eq(blogDrafts.id, id));
+
+      res.json({ jobId: job.id, status: 'accepted' });
+      await logAudit(req.user!.userId, req.user!.username, 'blog-draft.analyze', 'blog_draft', id, { jobId: job.id, title: draft.title });
+
+      runSeoAnalyzerForDraft({
+        id: draft.id,
+        title: draft.title,
+        content: draft.content!,
+        url: draft.url,
+        seoKeywords: draft.seoKeywords,
+        notionPageId: draft.notionPageId,
+      }, job.id).catch((err: Error) => {
+        log.error({ draftId: id, jobId: job.id, err: err.message }, 'Draft SEO analysis failed');
+      });
+    } catch (err: any) {
+      log.error({ draftId: id, err: err.message }, 'Failed to create draft analysis job');
+      res.status(500).json({ error: 'Failed to start analysis' });
+    }
+  });
 
 // GET /api/blog-drafts/:id
 router.get('/blog-drafts/:id', requireAuth, requirePermission(PERM), async (req: Request, res: Response) => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { NavLink } from 'react-router-dom';
 import { api, type BlogDraft } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../lib/toast';
@@ -26,6 +27,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function BlogDrafts() {
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -38,6 +40,15 @@ export default function BlogDrafts() {
     queryKey: ['blog-drafts', statusFilter],
     queryFn: () => api.getBlogDrafts({ status: statusFilter || undefined }),
     refetchInterval: 30_000,
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: api.syncBlogDrafts,
+    onSuccess: (r) => {
+      toast(`Synced from Notion: ${r.created} new, ${r.updated} updated${r.skipped ? `, ${r.skipped} skipped` : ''}`, 'success');
+      qc.invalidateQueries({ queryKey: ['blog-drafts'] });
+    },
+    onError: (err: Error) => toast(err.message, 'error'),
   });
 
   const drafts = data?.drafts ?? [];
@@ -56,6 +67,11 @@ export default function BlogDrafts() {
               <option key={v} value={v}>{l}</option>
             ))}
           </select>
+          <button className="sn-btn sn-btn-primary"
+            disabled={syncMutation.isPending}
+            onClick={() => syncMutation.mutate()}>
+            {syncMutation.isPending ? <><span className="spinner" /> Syncing...</> : '⟳ Sync from Notion'}
+          </button>
         </div>
       </div>
 
@@ -63,7 +79,7 @@ export default function BlogDrafts() {
         <div>
           <div className="title-kicker">Content Team</div>
           <h1 className="page-title">New Blog Drafts</h1>
-          <p className="page-sub">Incoming blog drafts submitted via Go routines. Review before passing to agents.</p>
+          <p className="page-sub">Drafts synced from the Notion Blog Tracker. Review before passing to agents.</p>
         </div>
         <div className="title-meta">
           {pending > 0 && <span className="tag"><span className="tag-dot" style={{ background: '#f0a500' }} /> {pending} pending</span>}
@@ -77,7 +93,12 @@ export default function BlogDrafts() {
         ) : drafts.length === 0 ? (
           <div style={{ padding: 60, textAlign: 'center', color: '#697a82', fontSize: 13 }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
-            No drafts{statusFilter ? ` with status "${STATUS_LABEL[statusFilter] ?? statusFilter}"` : ''}.
+            <div style={{ marginBottom: 12 }}>No drafts{statusFilter ? ` with status "${STATUS_LABEL[statusFilter] ?? statusFilter}"` : ''}.</div>
+            {!statusFilter && (
+              <button className="sn-btn" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
+                {syncMutation.isPending ? 'Syncing...' : '⟳ Sync from Notion Blog Tracker'}
+              </button>
+            )}
           </div>
         ) : (
           drafts.map(draft => (
@@ -107,6 +128,7 @@ function DraftRow({
   onUpdated: () => void;
 }) {
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [reviewNote, setReviewNote] = useState(draft.reviewNote ?? '');
   const [deciding, setDeciding] = useState(false);
 
@@ -116,6 +138,20 @@ function DraftRow({
     onSuccess: () => { onUpdated(); setDeciding(false); },
     onError: (err: Error) => { toast(err.message, 'error'); onUpdated(); },
   });
+
+  const analyzeMutation = useMutation({
+    mutationFn: () => api.analyzeBlogDraft(draft.id),
+    onSuccess: () => {
+      toast('SEO analysis started — result will also appear in Notion', 'success');
+      onUpdated();
+    },
+    onError: (err: Error) => { toast(err.message, 'error'); onUpdated(); },
+  });
+
+  const canAnalyze  = hasPermission('agents:trigger:seo-analyzer') || hasPermission('*');
+  const wordCount   = draft.content ? draft.content.trim().split(/\s+/).length : 0;
+  const contentOk   = wordCount >= 300;
+  const analyzable  = (draft.status === 'pending' || draft.status === 'in_review') && canAnalyze;
 
   function claim() { mutation.mutate({ status: 'in_review' }); }
   function approve() { mutation.mutate({ status: 'approved', reviewNote: reviewNote || undefined }); }
@@ -139,6 +175,16 @@ function DraftRow({
             }}>
               {STATUS_LABEL[draft.status] ?? draft.status}
             </span>
+            {draft.category && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#f0f4ff', color: '#1a4fa0' }}>
+                {draft.category}
+              </span>
+            )}
+            {draft.notionStatus && (
+              <span style={{ fontSize: 10, color: '#697a82', border: '1px solid #d5dadd', borderRadius: 999, padding: '1px 7px' }}>
+                Notion: {draft.notionStatus}
+              </span>
+            )}
             {draft.source && (
               <span style={{ fontSize: 10, color: '#9badb5', fontFamily: 'monospace' }}>source: {draft.source}</span>
             )}
@@ -150,6 +196,9 @@ function DraftRow({
                 onClick={e => e.stopPropagation()}>
                 {draft.url.length > 60 ? draft.url.slice(0, 60) + '…' : draft.url}
               </a>
+            )}
+            {draft.publicationDate && (
+              <span style={{ fontSize: 11, color: '#697a82' }}>publish: {new Date(draft.publicationDate).toLocaleDateString()}</span>
             )}
             <span style={{ fontSize: 11, color: '#9badb5' }}>{timeAgo(draft.createdAt)}</span>
             {draft.reviewerName && (
@@ -163,6 +212,16 @@ function DraftRow({
       {/* Expanded content + actions */}
       {expanded && (
         <div style={{ padding: '0 18px 18px 18px', borderTop: '1px solid #f0f3f5' }}>
+          {draft.seoKeywords && (
+            <div style={{
+              background: '#f0f4ff', border: '1px solid #d9e4ff', borderRadius: 6,
+              padding: '8px 12px', fontSize: 12, color: '#1a4fa0', marginTop: 12,
+              whiteSpace: 'pre-wrap',
+            }}>
+              <span style={{ fontWeight: 700, marginRight: 6 }}>SEO Keywords:</span>
+              {draft.seoKeywords}
+            </div>
+          )}
           {draft.content ? (
             <div style={{
               background: '#f9fbfc', border: '1px solid #e8edf0', borderRadius: 6,
@@ -188,6 +247,19 @@ function DraftRow({
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {analyzable && (
+              <button className="sn-btn" style={{ fontSize: 12, color: '#08763c', borderColor: '#08763c', fontWeight: 700 }}
+                disabled={analyzeMutation.isPending || !contentOk}
+                title={contentOk ? 'Run SEO Analyzer on this draft' : `Needs 300+ words of draft content (has ${wordCount})`}
+                onClick={() => analyzeMutation.mutate()}>
+                {analyzeMutation.isPending ? <><span className="spinner" /> Starting...</> : '▶ Run SEO Analysis'}
+              </button>
+            )}
+            {draft.lastSeoJobId && (
+              <NavLink to={`/jobs/${draft.lastSeoJobId}`} className="sn-btn" style={{ fontSize: 12 }}>
+                View analysis →
+              </NavLink>
+            )}
             {draft.status === 'pending' && (
               <button className="sn-btn sn-btn-primary" style={{ fontSize: 12 }}
                 disabled={mutation.isPending}

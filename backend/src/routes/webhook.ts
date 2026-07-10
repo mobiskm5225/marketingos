@@ -9,9 +9,11 @@ import {
   getPageContent,
   extractNotionPageId,
   getPageTitle,
+  titleFromPage,
   queryDatabase,
 } from '../core/notion/reader';
 import { createDatabaseEntry } from '../core/notion/writer';
+import { upsertTrackerPage } from '../core/blog-tracker-sync';
 import log from '../logger';
 
 const router = Router();
@@ -46,8 +48,15 @@ async function processPageWithDbCheck(pageId: string): Promise<void> {
 
   const dbId = (page.parent?.database_id ?? '').replace(/-/g, '');
 
-  // Blog Tracker special handling — extracts URL, creates SEO Reviews entry
+  // Blog Tracker special handling — sync page into blog_drafts, then the
+  // legacy brief-URL flow (creates SEO Reviews entry when URL is a Notion link)
   if (BLOG_TRACKER_DB_ID && dbId === BLOG_TRACKER_DB_ID) {
+    try {
+      const outcome = await upsertTrackerPage(page);
+      log.info({ pageId, outcome }, 'Blog Tracker page synced to blog_drafts');
+    } catch (err: any) {
+      log.error({ pageId, err: err.message }, 'Blog Tracker draft sync failed');
+    }
     await processBriefUrlTrigger(page, pageId);
     return;
   }
@@ -65,16 +74,18 @@ async function processPageWithDbCheck(pageId: string): Promise<void> {
     return;
   }
 
-  const pageTitle: string | null =
-    page.properties?.Name?.title?.[0]?.plain_text ??
-    page.properties?.title?.title?.[0]?.plain_text ??
-    null;
+  // Type-based lookup — works whatever the title property is named
+  const pageTitle = titleFromPage(page) || null;
 
   await dispatchAgent(dbId, pageId, 'webhook', pageTitle);
 }
 
 async function processBriefUrlTrigger(page: any, briefPageId: string): Promise<void> {
-  const url: string = page.properties?.URL?.url ?? '';
+  // URL property may be a url-type or rich_text-type column
+  const urlProp = page.properties?.URL;
+  const url: string = urlProp?.url
+    ?? (urlProp?.rich_text ?? []).map((t: any) => t.plain_text ?? '').join('').trim()
+    ?? '';
   if (!url) {
     log.info({ briefPageId }, 'Brief has no URL, skipping');
     return;
