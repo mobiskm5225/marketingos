@@ -1,6 +1,6 @@
-# Acefone Intelligence — Documentation
+# Marketing OS — Documentation
 
-Internal multi-agent SEO and content analysis platform. AI agents analyze blog content and live URLs, write results to Notion, and log every run to PostgreSQL for cost tracking and observability.
+Internal multi-agent SEO and marketing platform. AI agents analyze content, gather market data, and log every run to PostgreSQL for cost tracking and observability. The frontend serves as a centralized hub for managing agents, knowledge bases, and models.
 
 ---
 
@@ -10,10 +10,10 @@ Internal multi-agent SEO and content analysis platform. AI agents analyze blog c
 |---|---|
 | [setup.md](./setup.md) | **Start here.** Prerequisites, install, env vars, running locally, ngrok webhook setup, troubleshooting |
 | [architecture.md](./architecture.md) | System overview, data flow diagrams, directory structure, design patterns |
-| [agents.md](./agents.md) | SEO Analyzer and Existing Blog Reviewer — pipeline steps, analysis frameworks, prompt structure, how to add a new agent |
-| [api.md](./api.md) | All HTTP endpoints with request/response examples, auth details, error shapes |
+| [agents.md](./agents.md) | Pipeline steps, analysis frameworks, prompt structure, how to add a new agent |
+| [api.md](./api.md) | All HTTP endpoints with request/response examples |
 | [database.md](./database.md) | PostgreSQL schema, Drizzle definitions, indexes, useful queries |
-| [frontend.md](./frontend.md) | React component structure, routing, state management, API client, styles |
+| [frontend.md](./frontend.md) | React component structure, TanStack Start routing, mock data, styles |
 
 ---
 
@@ -26,18 +26,14 @@ cd backend && npm run dev
 cd frontend && npm run dev   # new terminal
 ```
 
-**Trigger an agent:**
-```
-http://localhost:3000/trigger
-```
-
 **API health check:**
 ```bash
 curl http://localhost:8000/health
 ```
 
 **Active agents:**
-- `seo-analyzer` — Pre-publish draft content review (5-layer SEO framework)
-- `blog-reviewer` — Post-publish live URL audit (SEO + AEO + AIO, 8 modules)
+- `atlas` — Campaign Strategist
+- `quill` — Long-form Writer
+- `scout` — Market Researcher
 
-**Stack:** Node.js 18 · Express 5 · TypeScript · PostgreSQL 16 · Drizzle ORM · React 19 · Vite 8 · TanStack Query v5 · GPT-4o
+**Stack:** Node.js 18 · Express 5 · TypeScript · PostgreSQL 16 · Drizzle ORM · React 19 · TanStack Start · Tailwind CSS v4 · GPT-4o

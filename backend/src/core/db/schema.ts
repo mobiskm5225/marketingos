@@ -1,170 +1,93 @@
-import { pgTable, uuid, varchar, text, integer, decimal, timestamp, boolean, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, integer, timestamp, jsonb } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-export const agentJobs = pgTable('agent_jobs', {
+// ─── Agents ───────────────────────────────────────────────────────────────────
+
+export const agents = pgTable('agents', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  agentName: varchar('agent_name', { length: 50 }).notNull(),
-  notionPageId: varchar('notion_page_id', { length: 50 }),
-  title: text('title'),
-  status: varchar('status', { length: 20 }).notNull(),
-  inputTokens: integer('input_tokens'),
-  outputTokens: integer('output_tokens'),
-  costUsd: decimal('cost_usd', { precision: 10, scale: 6 }),
-  errorMessage: text('error_message'),
-  source: varchar('source', { length: 30 }),
-  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
-});
-
-export const agentResults = pgTable('agent_results', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  jobId: uuid('job_id').references(() => agentJobs.id),
-  resultType: varchar('result_type', { length: 50 }),
-  content: text('content'),
-  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
-});
-
-export const kbCache = pgTable('kb_cache', {
-  kbKey: varchar('kb_key', { length: 100 }).primaryKey(),
-  content: text('content'),
-  cachedAt: timestamp('cached_at', { withTimezone: true }).default(sql`now()`),
-  ttlSeconds: integer('ttl_seconds').default(3600),
-});
-
-// ─── RBAC tables ─────────────────────────────────────────────────────────────
-
-export const users = pgTable('users', {
-  id:           uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  username:     varchar('username', { length: 50 }).unique().notNull(),
-  passwordHash: text('password_hash').notNull(),
-  email:        varchar('email', { length: 100 }),
-  isActive:     boolean('is_active').notNull().default(true),
-  createdAt:    timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
-  updatedAt:    timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
-});
-
-export const groups = pgTable('groups', {
-  id:          uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  name:        varchar('name', { length: 50 }).unique().notNull(),
-  description: text('description'),
-  createdAt:   timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
-});
-
-export const permissions = pgTable('permissions', {
-  id:          uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  name:        varchar('name', { length: 100 }).unique().notNull(),
-  description: text('description'),
-});
-
-export const groupPermissions = pgTable('group_permissions', {
-  groupId:      uuid('group_id').notNull().references(() => groups.id, { onDelete: 'cascade' }),
-  permissionId: uuid('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
-}, t => ({ pk: primaryKey({ columns: [t.groupId, t.permissionId] }) }));
-
-export const userGroups = pgTable('user_groups', {
-  userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  groupId:   uuid('group_id').notNull().references(() => groups.id, { onDelete: 'cascade' }),
-  groupRole: varchar('group_role', { length: 20 }).notNull().default('member'),
-}, t => ({ pk: primaryKey({ columns: [t.userId, t.groupId] }) }));
-
-// ─── Audit + Review ──────────────────────────────────────────────────────────
-
-export const auditLogs = pgTable('audit_logs', {
-  id:         uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  userId:     uuid('user_id'),
-  username:   varchar('username', { length: 50 }).notNull(),
-  action:     varchar('action', { length: 100 }).notNull(),
-  entityType: varchar('entity_type', { length: 50 }),
-  entityId:   uuid('entity_id'),
-  metadata:   text('metadata'),
-  createdAt:  timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
-});
-
-export const jobReviews = pgTable('job_reviews', {
-  id:           uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  jobId:        uuid('job_id').notNull().references(() => agentJobs.id, { onDelete: 'cascade' }),
-  groupName:    varchar('group_name', { length: 50 }).notNull(),
-  status:       varchar('status', { length: 30 }).notNull().default('pending_review'),
-  reviewerId:   uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
-  reviewerName: varchar('reviewer_name', { length: 50 }),
-  reviewNote:   text('review_note'),
-  reviewedAt:   timestamp('reviewed_at', { withTimezone: true }),
-  leadId:       uuid('lead_id').references(() => users.id, { onDelete: 'set null' }),
-  leadName:     varchar('lead_name', { length: 50 }),
-  leadComment:  text('lead_comment'),
-  decidedAt:    timestamp('decided_at', { withTimezone: true }),
-  createdAt:    timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
-  updatedAt:    timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
-});
-
-// ─── Blog Drafts ─────────────────────────────────────────────────────────────
-
-export const blogDrafts = pgTable('blog_drafts', {
-  id:            uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  title:         text('title').notNull(),
-  content:       text('content'),
-  url:           text('url'),
-  source:        varchar('source', { length: 100 }).default('api'),
-  status:        varchar('status', { length: 30 }).notNull().default('pending'),
-  reviewerId:    uuid('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
-  reviewerName:  varchar('reviewer_name', { length: 50 }),
-  reviewNote:    text('review_note'),
-  reviewedAt:    timestamp('reviewed_at', { withTimezone: true }),
-  // Notion Blog Tracker sync fields (migration 007)
-  notionPageId:    varchar('notion_page_id', { length: 50 }).unique(),
-  category:        varchar('category', { length: 50 }),
-  seoKeywords:     text('seo_keywords'),
-  notionStatus:    varchar('notion_status', { length: 30 }),
-  publicationDate: timestamp('publication_date', { withTimezone: true }),
-  lastSeoJobId:    uuid('last_seo_job_id').references(() => agentJobs.id, { onDelete: 'set null' }),
-  createdAt:     timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
-  updatedAt:     timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
-});
-
-// ─── LinkedIn Creatives ──────────────────────────────────────────────────────
-
-export const linkedinPosts = pgTable('linkedin_posts', {
-  id:           uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  title:        text('title'),
-  content:      text('content').notNull(),
-  source:       varchar('source', { length: 100 }).default('claude-routine'),
-  status:       varchar('status', { length: 30 }).notNull().default('pending'),
-  errorMessage: text('error_message'),
-  lastJobId:    uuid('last_job_id').references(() => agentJobs.id, { onDelete: 'set null' }),
-  createdAt:    timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
-  updatedAt:    timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
-});
-
-export const linkedinCreatives = pgTable('linkedin_creatives', {
-  id:          uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  postId:      uuid('post_id').notNull().references(() => linkedinPosts.id, { onDelete: 'cascade' }),
-  jobId:       uuid('job_id').references(() => agentJobs.id, { onDelete: 'set null' }),
-  variant:     integer('variant').notNull().default(1),
-  concept:     text('concept'),
-  imagePrompt: text('image_prompt'),
-  caption:     text('caption'),
-  imageB64:    text('image_b64'),
-  costUsd:     decimal('cost_usd', { precision: 10, scale: 6 }),
-  createdAt:   timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
-});
-
-// ─── App settings (design system) ────────────────────────────────────────────
-
-export const appSettings = pgTable('app_settings', {
-  key:       varchar('key', { length: 100 }).primaryKey(),
-  value:     text('value').notNull(),
-  updatedBy: varchar('updated_by', { length: 50 }),
+  slug: varchar('slug', { length: 100 }).notNull().unique(), // e.g. "atlas"
+  name: varchar('name', { length: 100 }).notNull(),
+  role: varchar('role', { length: 100 }).notNull(),
+  description: text('description').notNull(),
+  status: varchar('status', { length: 20 }).notNull(), // 'active', 'draft', 'paused'
+  icon: varchar('icon', { length: 50 }).notNull(),
+  model: varchar('model', { length: 100 }).notNull(),
+  skills: jsonb('skills').default('[]').notNull(), // string[]
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
 });
 
-// ─── Notifications ────────────────────────────────────────────────────────────
+// ─── Knowledge Bases ──────────────────────────────────────────────────────────
 
-export const notifications = pgTable('notifications', {
-  id:        uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  type:      varchar('type', { length: 30 }).notNull(),   // job_done | job_error | job_started | system
-  title:     text('title').notNull(),
-  message:   text('message'),
-  jobId:     uuid('job_id').references(() => agentJobs.id, { onDelete: 'cascade' }),
-  read:      boolean('read').notNull().default(false),
+export const knowledgeBases = pgTable('knowledge_bases', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  slug: varchar('slug', { length: 100 }).notNull().unique(),
+  name: varchar('name', { length: 100 }).notNull(),
+  type: varchar('type', { length: 50 }).notNull(),
+  source: varchar('source', { length: 100 }).notNull(),
+  docsCount: integer('docs_count').default(0).notNull(),
+  chunksCount: integer('chunks_count').default(0).notNull(),
+  icon: varchar('icon', { length: 50 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+// Join table for many-to-many relationship between Agents and Knowledge Bases
+export const agentKnowledgeBases = pgTable('agent_knowledge_bases', {
+  agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'cascade' }).notNull(),
+  kbId: uuid('kb_id').references(() => knowledgeBases.id, { onDelete: 'cascade' }).notNull(),
+});
+
+// ─── Integrations & Models ────────────────────────────────────────────────────
+
+export const modelProviders = pgTable('model_providers', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  slug: varchar('slug', { length: 100 }).notNull().unique(),
+  name: varchar('name', { length: 100 }).notNull(),
+  kind: varchar('kind', { length: 50 }).notNull(),
+  models: jsonb('models').default('[]').notNull(), // string[]
+  status: varchar('status', { length: 20 }).notNull(), // 'connected', 'available'
+  note: text('note').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+export const integrations = pgTable('integrations', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  slug: varchar('slug', { length: 100 }).notNull().unique(),
+  name: varchar('name', { length: 100 }).notNull(),
+  blurb: text('blurb').notNull(),
+  status: varchar('status', { length: 20 }).notNull(), // 'connected', 'available'
+  detail: text('detail').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+// ─── Runs & Activity ──────────────────────────────────────────────────────────
+
+export const runs = pgTable('runs', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  slug: varchar('slug', { length: 100 }).notNull().unique(), // e.g. "run-2041"
+  title: text('title').notNull(),
+  agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'cascade' }).notNull(),
+  status: varchar('status', { length: 20 }).notNull(), // 'complete', 'running', 'needs review'
+  startedAt: timestamp('started_at', { withTimezone: true }).default(sql`now()`).notNull(),
+  duration: varchar('duration', { length: 50 }).notNull(), // e.g. "3m 41s"
+  model: varchar('model', { length: 100 }).notNull(),
+  summary: text('summary').notNull(),
+  
+  // JSONB arrays to match frontend expectations
+  metrics: jsonb('metrics').default('[]').notNull(),
+  sections: jsonb('sections').default('[]').notNull(),
+  sources: jsonb('sources').default('[]').notNull(),
+  attachments: jsonb('attachments').default('[]').notNull(),
+  comments: jsonb('comments').default('[]').notNull(),
+  
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`).notNull(),
+});
+
+export const activities = pgTable('activities', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  slug: varchar('slug', { length: 100 }).notNull().unique(),
+  text: text('text').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`).notNull(),
 });

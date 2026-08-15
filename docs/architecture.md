@@ -99,7 +99,6 @@ acefone-intelligence/
 │   │   │   │   └── writer.ts          # createSubpage, createDatabaseEntry, updateStatus
 │   │   │   └── crawler.ts             # crawlUrl() — Cheerio + Readability
 │   │   ├── middleware/
-│   │   │   ├── auth.ts                # HMAC webhook verify + ingest secret
 │   │   │   └── logger.ts              # Morgan HTTP logger
 │   │   ├── routes/
 │   │   │   ├── health.ts              # GET /health
@@ -118,20 +117,23 @@ acefone-intelligence/
 │   └── .env.example
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Dashboard.tsx          # Stats + recent jobs + system health
-│   │   │   ├── Jobs.tsx               # Paginated list + filter + sort + export
-│   │   │   ├── JobDetail.tsx          # Single job + markdown output
-│   │   │   └── Trigger.tsx            # Agent submission forms
-│   │   ├── lib/
-│   │   │   ├── api.ts                 # TypeScript API client
-│   │   │   └── toast.tsx              # Toast notification context + hook
-│   │   ├── App.tsx                    # Shell layout + router + nav
-│   │   ├── main.tsx                   # React DOM entry
-│   │   └── index.css                  # ServiceNow-inspired global styles
-│   ├── index.html
-│   ├── vite.config.ts                 # Proxy /api → :8000
-│   └── package.json
+│   │   ├── components/                # shadcn/ui components and layout wrapper
+│   │   ├── data/                      # Local seed data (marketing-os.ts)
+│   │   ├── routes/                    # TanStack file-based routing tree
+│   │   │   ├── __root.tsx             # Root layout and Error boundaries
+│   │   │   ├── index.tsx              # Overview page
+│   │   │   ├── agents.tsx             # Agent creation and management
+│   │   │   ├── knowledge.tsx          # Knowledge base management
+│   │   │   ├── models.tsx             # LLM provider configuration
+│   │   │   └── runs/                  # Run results pages
+│   │   ├── lib/                       # Utilities and config
+│   │   ├── router.tsx                 # Router instance creation
+│   │   ├── client.tsx                 # Client entry point
+│   │   ├── server.ts                  # SSR entry point
+│   │   └── styles.css                 # Tailwind v4 theme configuration
+│   ├── vite.config.ts                 # TanStack Start plugin configuration
+│   ├── package.json
+│   └── components.json                # shadcn configuration
 ├── docs/                              # This folder
 ├── docker-compose.yml                 # PostgreSQL 16
 └── .env.example
@@ -157,17 +159,14 @@ acefone-intelligence/
 11. All steps log to agentJobs + agentResults in PostgreSQL
 ```
 
-### API-triggered flow (Frontend → Agent → DB only)
+### API-triggered flow (Agent → DB only)
 
 ```
-1. User fills form at /trigger in React frontend
-2. POST /api/agents/seo-analyzer (or blog-reviewer)
-3. Backend creates job record (status=pending)
-4. Returns { jobId } immediately (202 Accepted)
-5. Background: agent runs analysis
-6. Agent updates job record → done/error
-7. Frontend polls GET /api/jobs/:jobId every 3s
-8. On done: renders markdown output from agentResults
+1. POST /api/agents/seo-analyzer (or blog-reviewer)
+2. Backend creates job record (status=pending)
+3. Returns { jobId } immediately (202 Accepted)
+4. Background: agent runs analysis
+5. Agent updates job record → done/error
 ```
 
 ### Blog Tracker flow (Notion URL trigger → SEO review)
