@@ -1,12 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Bot, Plus, Save, Trash2, TriangleAlert, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { PipelineMap } from "@/components/PipelineMap";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -24,31 +27,42 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { api, type Agent } from "@/lib/api";
-import { Megaphone, MessageSquare, LineChart, Target, PenTool, Database, FileText, Globe, Bot } from "lucide-react";
-
-// For the prototype, we map strings to components manually here
-const iconMap: Record<string, any> = {
-  Megaphone, MessageSquare, LineChart, Target, PenTool, Database, FileText, Globe
-};
-const getIcon = (name: string) => iconMap[name] || Bot;
+import {
+  api,
+  type Agent,
+  type AgentDetail,
+  type AgentStage,
+  type Category,
+  type ModelProvider,
+  type SkillSummary,
+  type StageWrite,
+} from "@/lib/api";
 
 export const Route = createFileRoute("/agents")({
   head: () => ({
     meta: [
       { title: "Agents — Marketing OS" },
-      { name: "description", content: "Create marketing agents, assign skills, knowledge bases and a model." },
+      {
+        name: "description",
+        content:
+          "Build an agent as a pipeline of skills, and choose which model runs at each stage.",
+      },
       { property: "og:title", content: "Agents — Marketing OS" },
-      { property: "og:description", content: "Create marketing agents, assign skills, knowledge bases and a model." },
+      {
+        property: "og:description",
+        content: "Compose skills into a pipeline and route each stage to its own model.",
+      },
     ],
   }),
   loader: async () => {
-    const [initialAgents, knowledgeBases, modelProviders] = await Promise.all([
+    const [agents, knowledgeBases, modelProviders, skills, categories] = await Promise.all([
       api.getAgents(),
       api.getKnowledgeBases(),
       api.getModels(),
+      api.getSkills(),
+      api.getCategories(),
     ]);
-    return { initialAgents, knowledgeBases, modelProviders };
+    return { agents, knowledgeBases, modelProviders, skills, categories };
   },
   component: AgentsPage,
 });
@@ -59,308 +73,803 @@ const statusTone: Record<Agent["status"], string> = {
   draft: "border-accent/40 text-accent",
 };
 
-const skillLibrary = [
-  { name: "SEO writing", category: "Content" },
-  { name: "Tone matching", category: "Content" },
-  { name: "Hook writing", category: "Social" },
-  { name: "Repurposing", category: "Social" },
-  { name: "Competitor scan", category: "Research" },
-  { name: "Review mining", category: "Research" },
-  { name: "Pricing diff", category: "Research" },
-  { name: "Positioning", category: "Strategy" },
-  { name: "Channel planning", category: "Strategy" },
-  { name: "Budget split", category: "Strategy" },
-  { name: "ICP research", category: "Strategy" },
-];
+/** Every model across every provider, tagged so a stage can pick one. */
+function modelChoices(providers: ModelProvider[]) {
+  return providers.flatMap((p) => p.models.map((m) => ({ provider: p.id, model: m, kind: p.kind })));
+}
 
 function AgentsPage() {
-  const { initialAgents, knowledgeBases, modelProviders } = Route.useLoaderData();
-  const allModels = modelProviders.flatMap((p) => p.models);
+  const { agents, knowledgeBases, modelProviders, skills, categories } = Route.useLoaderData();
+  const router = useRouter();
 
-  const [agents, setAgents] = useState<Agent[]>(initialAgents);
-  const [selectedId, setSelectedId] = useState(initialAgents[0]?.id || "");
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({ name: "", role: "", description: "", model: allModels[0] || "" });
-  const [newSkill, setNewSkill] = useState("");
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(agents[0]?.id ?? null);
+  const [detail, setDetail] = useState<AgentDetail | null>(null);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
-  const selected = (agents.find((a) => a.id === selectedId) ?? agents[0]) as Agent | undefined;
+  const choices = modelChoices(modelProviders);
 
-  const update = (id: string, patch: Partial<Agent>) =>
-    setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-
-  const addSkill = (skill: string) => {
-    const value = skill.trim();
-    if (!value || selected.skills.includes(value)) return;
-    update(selected.id, { skills: [...selected.skills, value] });
-    setNewSkill("");
-  };
-
-  const toggleBase = (name: string) => {
-    const has = selected.knowledgeBases.includes(name);
-    update(selected.id, {
-      knowledgeBases: has
-        ? selected.knowledgeBases.filter((k) => k !== name)
-        : [...selected.knowledgeBases, name],
-    });
-  };
-
-  const createAgent = () => {
-    if (!draft.name.trim()) return;
-    const agent: Agent = {
-      id: draft.name.toLowerCase().replace(/\s+/g, "-"),
-      name: draft.name,
-      role: draft.role || "Custom agent",
-      description: draft.description || "No description yet.",
-      status: "draft",
-      icon: seedAgents[0]!.icon,
-      model: draft.model,
-      skills: [],
-      knowledgeBases: [],
-      runs: 0,
-      successRate: 0,
-      lastRun: "never",
+  useEffect(() => {
+    if (!selectedSlug) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .getAgent(selectedSlug)
+      .then((d) => {
+        if (cancelled) return;
+        setDetail(d);
+        setSelectedStageId(null);
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Could not load agent"));
+    return () => {
+      cancelled = true;
     };
-    setAgents((prev) => [agent, ...prev]);
-    setSelectedId(agent.id);
-    setOpen(false);
-    setDraft({ name: "", role: "", description: "", model: allModels[0]! });
-    toast.success(`${agent.name} created`);
+  }, [selectedSlug]);
+
+  const reload = async () => {
+    await router.invalidate();
+    if (selectedSlug) setDetail(await api.getAgent(selectedSlug));
   };
+
+  /** Writes the whole pipeline back, then refreshes so levels are recomputed. */
+  const saveStages = async (next: AgentStage[]) => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const payload: StageWrite[] = next.map((s) => ({
+        id: s.id,
+        skill: s.skill,
+        position: s.position,
+        dependsOn: s.dependsOn,
+        isGate: s.isGate,
+        provider: s.provider,
+        model: s.model,
+      }));
+      await api.saveStages(detail.id, payload);
+      await reload();
+      toast.success("Pipeline saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the pipeline");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const patchAgent = async (body: Parameters<typeof api.updateAgent>[1], message: string) => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await api.updateAgent(detail.id, body);
+      await reload();
+      toast.success(message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeAgent = async () => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await api.deleteAgent(detail.id);
+      setSelectedSlug(null);
+      setDetail(null);
+      await router.invalidate();
+      toast.success("Agent deleted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stage = detail?.stages.find((s) => s.id === selectedStageId) ?? null;
 
   return (
     <AppShell
       title="Agents"
-      subtitle="Each agent is a role, a skill set, the memory it can read and the model it runs on."
+      subtitle="An agent is a pipeline of skills. Each stage can run on its own model."
       action={
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="size-4" /> New agent
             </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create an agent</DialogTitle>
-              <DialogDescription>Skills and knowledge can be added after.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="Beacon"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Input
-                  id="role"
-                  value={draft.role}
-                  onChange={(e) => setDraft({ ...draft, role: e.target.value })}
-                  placeholder="Lifecycle email writer"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="desc">What it does</Label>
-                <Textarea
-                  id="desc"
-                  value={draft.description}
-                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                  placeholder="Writes onboarding sequences from product docs."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Model</Label>
-                <Select
-                  value={draft.model}
-                  onValueChange={(model) => setDraft({ ...draft, model })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allModels.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={createAgent}>Create agent</Button>
-            </DialogFooter>
-          </DialogContent>
+          <CreateAgentDialog
+            choices={choices}
+            categories={categories}
+            onCreated={async (slug) => {
+              setCreateOpen(false);
+              await router.invalidate();
+              setSelectedSlug(slug);
+            }}
+          />
         </Dialog>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <div className="space-y-3">
-          {agents.map((agent) => (
-            <button
-              key={agent.id}
-              onClick={() => setSelectedId(agent.id)}
-              className={`panel w-full p-4 text-left transition-colors ${
-                agent.id === selected?.id ? "border-primary/60" : "hover:border-border/80"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-md bg-secondary">
-                  {(() => {
-                    const Icon = getIcon(agent.icon);
-                    return <Icon className="size-4 text-primary" />;
-                  })()}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{agent.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{agent.role}</p>
-                </div>
-                <Badge variant="outline" className={`ml-auto ${statusTone[agent.status]}`}>
-                  {agent.status}
-                </Badge>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                {agent.skills.length} skills · {agent.runs} runs · {agent.lastRun}
-              </p>
-            </button>
-          ))}
+      {agents.length === 0 ? (
+        <div className="panel flex flex-col items-center gap-2 border-dashed p-10 text-center">
+          <Bot className="size-6 text-primary" />
+          <p className="font-medium">No agents yet</p>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Create one here, or import a folder of skills from the Skills tab — an import builds
+            the agent and its pipeline for you.
+          </p>
         </div>
-
-        <div className="space-y-6">
-          {selected && (
-            <>
-              <section className="panel p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold">{selected.name}</h2>
-                    <p className="text-sm text-muted-foreground">{selected.role}</p>
-                  </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    update(selected.id, {
-                      status: selected.status === "active" ? "paused" : "active",
-                    })
-                  }
-                >
-                  {selected.status === "active" ? "Pause" : "Activate"}
-                </Button>
-                <Button onClick={() => toast.success(`${selected.name} run queued`)}>Run agent</Button>
-              </div>
-            </div>
-            <p className="mt-4 max-w-2xl text-sm text-muted-foreground">{selected.description}</p>
-            <dl className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {[
-                ["Model", selected.model],
-                ["Runs", String(selected.runs)],
-                ["Success", `${selected.successRate}%`],
-                ["Last run", selected.lastRun],
-              ].map(([k, v]) => (
-                <div key={k} className="rounded-md border border-border bg-secondary/40 p-3">
-                  <dt className="text-xs text-muted-foreground">{k}</dt>
-                  <dd className="mt-1 truncate text-sm font-medium">{v}</dd>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+          <div className="space-y-3">
+            {agents.map((agent) => (
+              <button
+                key={agent.id}
+                onClick={() => setSelectedSlug(agent.id)}
+                className={`panel w-full p-4 text-left transition-colors ${
+                  agent.id === selectedSlug ? "border-primary/60" : "hover:border-border/80"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <p className="min-w-0 flex-1 truncate text-sm font-medium">{agent.name}</p>
+                  <Badge variant="outline" className={statusTone[agent.status]}>
+                    {agent.status}
+                  </Badge>
                 </div>
-              ))}
-            </dl>
-          </section>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {agent.skills.length} stages · {agent.runs} runs
+                </p>
+              </button>
+            ))}
+          </div>
 
-          <section className="panel p-5">
-            <h3 className="font-semibold">Skills</h3>
-            <p className="text-sm text-muted-foreground">
-              What this agent is allowed to do during a run.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {selected.skills.map((skill) => (
-                <span
-                  key={skill}
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1 text-xs"
-                >
-                  {skill}
-                  <button
-                    onClick={() =>
-                      update(selected.id, {
-                        skills: selected.skills.filter((s) => s !== skill),
-                      })
-                    }
-                    aria-label={`Remove ${skill}`}
-                  >
-                    <X className="size-3 text-muted-foreground" />
-                  </button>
-                </span>
-              ))}
-              {selected.skills.length === 0 && (
-                <p className="text-sm text-muted-foreground">No skills yet.</p>
-              )}
-            </div>
-            <div className="mt-4 flex gap-2">
-              <Input
-                value={newSkill}
-                onChange={(e) => setNewSkill(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addSkill(newSkill)}
-                placeholder="Add a custom skill…"
-              />
-              <Button variant="secondary" onClick={() => addSkill(newSkill)}>
-                Add
-              </Button>
-            </div>
-            <p className="mt-5 text-xs uppercase tracking-widest text-muted-foreground">
-              Skill library
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {skillLibrary
-                .filter((s) => !selected.skills.includes(s.name))
-                .map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => addSkill(s.name)}
-                    className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
-                  >
-                    + {s.name}
-                    <span className="ml-1 opacity-50">{s.category}</span>
-                  </button>
-                ))}
-            </div>
-          </section>
+          {detail ? (
+            <div className="space-y-4">
+              <section className="panel p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold">{detail.name}</h2>
+                    <p className="text-sm text-muted-foreground">{detail.role}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        patchAgent(
+                          { status: detail.status === "active" ? "paused" : "active" },
+                          detail.status === "active" ? "Agent paused" : "Agent activated",
+                        )
+                      }
+                    >
+                      {detail.status === "active" ? "Pause" : "Activate"}
+                    </Button>
+                    <Button variant="secondary" disabled={busy} onClick={removeAgent}>
+                      <Trash2 className="size-4" /> Delete
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
+                  {detail.description}
+                </p>
+              </section>
 
-          <section className="panel p-5">
-            <h3 className="font-semibold">Knowledge access</h3>
-            <p className="text-sm text-muted-foreground">
-              Bases this agent can read during a run.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {knowledgeBases.map((kb) => {
-                const on = selected.knowledgeBases.includes(kb.name);
-                return (
-                  <button
-                    key={kb.id}
-                    onClick={() => toggleBase(kb.name)}
-                    className={`flex items-start gap-3 rounded-md border p-3 text-left transition-colors ${
-                      on ? "border-primary/60 bg-primary/5" : "border-border hover:border-border/80"
-                    }`}
-                  >
-                    {(() => {
-                      const Icon = getIcon(kb.icon);
-                      return <Icon className="mt-0.5 size-4 text-primary" />;
-                    })()}
-                    <div>
-                      <p className="text-sm font-medium">{kb.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {kb.type} · {kb.docs} docs
-                      </p>
+              <Tabs defaultValue="pipeline">
+                <TabsList>
+                  <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+                  <TabsTrigger value="settings">Settings</TabsTrigger>
+                  <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
+                  <TabsTrigger value="references">References</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="pipeline" className="mt-4 space-y-4">
+                  {detail.cycle && (
+                    <div className="flex gap-2 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-xs">
+                      <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                      <span>
+                        These stages depend on each other in a loop and cannot run. Fix their
+                        dependencies below.
+                      </span>
                     </div>
-                  </button>
-                );
-              })}
+                  )}
+
+                  <PipelineMap
+                    stages={detail.stages}
+                    levels={detail.levels}
+                    selectedId={selectedStageId}
+                    defaultModel={detail.defaultModel}
+                    onSelect={setSelectedStageId}
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AddStage
+                      skills={skills}
+                      agentCategory={detail.category}
+                      used={detail.stages.map((s) => s.skill)}
+                      disabled={busy}
+                      onAdd={(skillSlug) => {
+                        const last = detail.stages[detail.stages.length - 1];
+                        const next: AgentStage[] = [
+                          ...detail.stages,
+                          {
+                            id: `new-${Date.now()}`,
+                            skill: skillSlug,
+                            skillName: skillSlug,
+                            description: "",
+                            position: (last?.position ?? 0) + 1,
+                            dependsOn: last ? [last.id] : [],
+                            isGate: false,
+                            provider: null,
+                            model: null,
+                            hasOverride: false,
+                          },
+                        ];
+                        void saveStages(next);
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Stages in the same column run in parallel.
+                    </p>
+                  </div>
+
+                  {stage && (
+                    <StagePanel
+                      stage={stage}
+                      allStages={detail.stages}
+                      choices={choices}
+                      defaultModel={detail.defaultModel}
+                      busy={busy}
+                      onClose={() => setSelectedStageId(null)}
+                      onChange={(updated) =>
+                        void saveStages(
+                          detail.stages.map((s) => (s.id === updated.id ? updated : s)),
+                        )
+                      }
+                      onRemove={() =>
+                        void saveStages(detail.stages.filter((s) => s.id !== stage.id))
+                      }
+                    />
+                  )}
+                </TabsContent>
+
+                <TabsContent value="settings" className="mt-4">
+                  <SettingsTab
+                    detail={detail}
+                    choices={choices}
+                    categories={categories}
+                    busy={busy}
+                    onSave={patchAgent}
+                  />
+                </TabsContent>
+
+                <TabsContent value="knowledge" className="mt-4">
+                  <section className="panel p-5">
+                    <h3 className="font-semibold">Knowledge access</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Bases this agent may retrieve from during a run.
+                    </p>
+                    {knowledgeBases.length === 0 ? (
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        No knowledge bases yet — create one on the Knowledge page.
+                      </p>
+                    ) : (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        {knowledgeBases.map((kb) => {
+                          const on = detail.knowledgeBases.includes(kb.id);
+                          return (
+                            <button
+                              key={kb.id}
+                              disabled={busy}
+                              onClick={async () => {
+                                const next = on
+                                  ? detail.knowledgeBases.filter((k) => k !== kb.id)
+                                  : [...detail.knowledgeBases, kb.id];
+                                setBusy(true);
+                                try {
+                                  await api.saveAgentKnowledgeBases(detail.id, next);
+                                  await reload();
+                                } catch (e) {
+                                  toast.error(e instanceof Error ? e.message : "Could not save");
+                                } finally {
+                                  setBusy(false);
+                                }
+                              }}
+                              className={`rounded-md border p-3 text-left transition-colors ${
+                                on ? "border-primary/60 bg-primary/5" : "border-border hover:border-border/80"
+                              }`}
+                            >
+                              <p className="text-sm font-medium">{kb.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {kb.type} · {kb.docs} docs
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                </TabsContent>
+
+                <TabsContent value="references" className="mt-4">
+                  <section className="panel p-5">
+                    <h3 className="font-semibold">References</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Small curated documents injected into every prompt this agent runs — distinct
+                      from knowledge bases, which are retrieved from by similarity.
+                    </p>
+                    {detail.references.length === 0 ? (
+                      <p className="mt-4 text-sm text-muted-foreground">No references yet.</p>
+                    ) : (
+                      <ul className="mt-4 divide-y divide-border">
+                        {detail.references.map((r) => (
+                          <li key={r.id} className="flex items-center justify-between py-2.5">
+                            <span className="text-sm">{r.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {Math.max(1, Math.round(r.bodyMd.length / 1024))} KB
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                </TabsContent>
+              </Tabs>
             </div>
-          </section>
-          </>
+          ) : (
+            <div className="panel flex items-center justify-center border-dashed p-12">
+              <p className="text-sm text-muted-foreground">Select an agent.</p>
+            </div>
           )}
         </div>
-      </div>
+      )}
     </AppShell>
+  );
+}
+
+// ─── Stage editor ─────────────────────────────────────────────────────────────
+
+function StagePanel({
+  stage,
+  allStages,
+  choices,
+  defaultModel,
+  busy,
+  onClose,
+  onChange,
+  onRemove,
+}: {
+  stage: AgentStage;
+  allStages: AgentStage[];
+  choices: { provider: string; model: string; kind: string }[];
+  defaultModel: string | null;
+  busy: boolean;
+  onClose: () => void;
+  onChange: (stage: AgentStage) => void;
+  onRemove: () => void;
+}) {
+  const value = stage.model ? `${stage.provider}::${stage.model}` : "__inherit__";
+
+  return (
+    <section className="panel p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium">{stage.skill}</p>
+          <p className="text-xs text-muted-foreground">
+            Stage {stage.position}
+            {stage.hasOverride && " · uses an agent-specific version of this skill"}
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          <X className="size-3.5" />
+        </Button>
+      </div>
+
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <Select
+            value={value}
+            onValueChange={(v) => {
+              if (v === "__inherit__") {
+                onChange({ ...stage, provider: null, model: null });
+                return;
+              }
+              const [provider, model] = v.split("::");
+              onChange({ ...stage, provider: provider!, model: model! });
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__inherit__">
+                Inherit — {defaultModel ?? "no agent default set"}
+              </SelectItem>
+              {choices.map((c) => (
+                <SelectItem key={`${c.provider}::${c.model}`} value={`${c.provider}::${c.model}`}>
+                  {c.model} · {c.provider}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Leave on inherit for cheap stages and override only where quality matters.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Gate</Label>
+              <p className="text-xs text-muted-foreground">
+                A failing gate sends work back instead of finishing the run.
+              </p>
+            </div>
+            <Switch
+              checked={stage.isGate}
+              disabled={busy}
+              onCheckedChange={(isGate) => onChange({ ...stage, isGate })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <Label>Runs after</Label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {allStages
+            .filter((s) => s.id !== stage.id)
+            .map((other) => {
+              const on = stage.dependsOn.includes(other.id);
+              return (
+                <button
+                  key={other.id}
+                  disabled={busy}
+                  onClick={() =>
+                    onChange({
+                      ...stage,
+                      dependsOn: on
+                        ? stage.dependsOn.filter((d) => d !== other.id)
+                        : [...stage.dependsOn, other.id],
+                    })
+                  }
+                  className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                    on
+                      ? "border-primary/60 bg-primary/10 text-foreground"
+                      : "border-dashed border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  {other.position}. {other.skill}
+                </button>
+              );
+            })}
+        </div>
+        {stage.dependsOn.length === 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            No dependencies — this stage starts in the first level.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 flex justify-end">
+        <Button variant="secondary" size="sm" disabled={busy} onClick={onRemove}>
+          <Trash2 className="size-3.5" /> Remove stage
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+function SettingsTab({
+  detail,
+  choices,
+  categories,
+  busy,
+  onSave,
+}: {
+  detail: AgentDetail;
+  choices: { provider: string; model: string }[];
+  categories: Category[];
+  busy: boolean;
+  onSave: (body: Parameters<typeof api.updateAgent>[1], message: string) => void;
+}) {
+  const [guardrails, setGuardrails] = useState(detail.guardrails ?? "");
+  const [role, setRole] = useState(detail.role);
+
+  useEffect(() => {
+    setGuardrails(detail.guardrails ?? "");
+    setRole(detail.role);
+  }, [detail.id, detail.guardrails, detail.role]);
+
+  const value = detail.defaultModel ? `${detail.defaultProvider}::${detail.defaultModel}` : "__none__";
+
+  return (
+    <div className="space-y-4">
+      <section className="panel p-5">
+        <h3 className="font-semibold">Default model</h3>
+        <p className="text-sm text-muted-foreground">
+          Every stage uses this unless it sets its own.
+        </p>
+        <div className="mt-4 max-w-md">
+          <Select
+            value={value}
+            onValueChange={(v) => {
+              if (v === "__none__") {
+                onSave({ defaultProvider: null, defaultModel: null }, "Default cleared");
+                return;
+              }
+              const [provider, model] = v.split("::");
+              onSave({ defaultProvider: provider!, defaultModel: model! }, "Default model set");
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">No default</SelectItem>
+              {choices.map((c) => (
+                <SelectItem key={`${c.provider}::${c.model}`} value={`${c.provider}::${c.model}`}>
+                  {c.model} · {c.provider}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
+
+      <section className="panel p-5">
+        <h3 className="font-semibold">Category</h3>
+        <p className="text-sm text-muted-foreground">
+          Determines which skills are suggested first in the pipeline builder.
+        </p>
+        <div className="mt-4 max-w-md">
+          <Select
+            value={detail.category ?? "__none__"}
+            onValueChange={(v) =>
+              onSave({ category: v === "__none__" ? null : v }, "Category saved")
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">No category</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
+
+      <section className="panel p-5">
+        <h3 className="font-semibold">Role</h3>
+        <div className="mt-3 flex max-w-xl gap-2">
+          <Input value={role} onChange={(e) => setRole(e.target.value)} />
+          <Button disabled={busy || role === detail.role} onClick={() => onSave({ role }, "Role saved")}>
+            <Save className="size-4" />
+          </Button>
+        </div>
+      </section>
+
+      <section className="panel p-5">
+        <h3 className="font-semibold">Guardrails</h3>
+        <p className="text-sm text-muted-foreground">
+          What this agent must not do. Carried into every stage's prompt.
+        </p>
+        <Textarea
+          className="mt-3 min-h-32"
+          value={guardrails}
+          onChange={(e) => setGuardrails(e.target.value)}
+          placeholder="Writes copy only. Never implies a published page exists."
+        />
+        <div className="mt-3 flex justify-end">
+          <Button
+            disabled={busy || guardrails === (detail.guardrails ?? "")}
+            onClick={() => onSave({ guardrails: guardrails || null }, "Guardrails saved")}
+          >
+            <Save className="size-4" /> Save
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ─── Add stage / create agent ─────────────────────────────────────────────────
+
+/**
+ * Skills matching the agent's category are listed first under "Suggested".
+ * Everything else stays available below rather than being filtered out — a
+ * cross-category skill like gather-context belongs in most pipelines.
+ */
+function AddStage({
+  skills,
+  agentCategory,
+  used,
+  disabled,
+  onAdd,
+}: {
+  skills: SkillSummary[];
+  agentCategory: string | null;
+  used: string[];
+  disabled: boolean;
+  onAdd: (slug: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  const available = skills.filter((s) => !used.includes(s.id));
+  const suggested = agentCategory ? available.filter((s) => s.category === agentCategory) : [];
+  const rest = available.filter((s) => !suggested.includes(s));
+
+  if (skills.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No skills in the library yet — add one on the Skills tab.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <Select value={value} onValueChange={setValue}>
+        <SelectTrigger className="w-64">
+          <SelectValue placeholder="Add a skill as a stage…" />
+        </SelectTrigger>
+        <SelectContent>
+          {suggested.length > 0 && (
+            <>
+              <p className="px-2 py-1.5 text-xs uppercase tracking-widest text-primary">
+                Suggested
+              </p>
+              {suggested.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+              <p className="mt-1 border-t border-border px-2 pb-1.5 pt-2 text-xs uppercase tracking-widest text-muted-foreground">
+                All skills
+              </p>
+            </>
+          )}
+          {rest.map((s) => (
+            <SelectItem key={s.id} value={s.id}>
+              {s.name}
+              {s.category ? ` · ${s.category}` : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        variant="secondary"
+        disabled={disabled || !value}
+        onClick={() => {
+          onAdd(value);
+          setValue("");
+        }}
+      >
+        <Plus className="size-4" /> Add stage
+      </Button>
+    </div>
+  );
+}
+
+function CreateAgentDialog({
+  choices,
+  categories,
+  onCreated,
+}: {
+  choices: { provider: string; model: string }[];
+  categories: Category[];
+  onCreated: (slug: string) => Promise<void>;
+}) {
+  const empty = { name: "", role: "", description: "", model: "", category: "" };
+  const [draft, setDraft] = useState(empty);
+  const [busy, setBusy] = useState(false);
+
+  const create = async () => {
+    if (!draft.name.trim()) return;
+    setBusy(true);
+    try {
+      const { id } = await api.createAgent({
+        name: draft.name,
+        role: draft.role || "Custom agent",
+        description: draft.description,
+        model: draft.model || null,
+        category: draft.category || null,
+      });
+      toast.success(`${draft.name} created`);
+      setDraft(empty);
+      await onCreated(id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create the agent");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Create an agent</DialogTitle>
+        <DialogDescription>Stages and knowledge can be added after.</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input
+            id="name"
+            value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            placeholder="Beacon"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="role">Role</Label>
+          <Input
+            id="role"
+            value={draft.role}
+            onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+            placeholder="Lifecycle email writer"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="desc">What it does</Label>
+          <Textarea
+            id="desc"
+            value={draft.description}
+            onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            placeholder="Writes onboarding sequences from product docs."
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Category</Label>
+          <Select
+            value={draft.category}
+            onValueChange={(category) => setDraft({ ...draft, category })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Choose a category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Skills in this category are suggested first when you build the pipeline.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label>Default model</Label>
+          <Select value={draft.model} onValueChange={(model) => setDraft({ ...draft, model })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose a model" />
+            </SelectTrigger>
+            <SelectContent>
+              {choices.map((c) => (
+                <SelectItem key={`${c.provider}::${c.model}`} value={c.model}>
+                  {c.model} · {c.provider}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button onClick={create} disabled={busy}>
+          {busy ? "Creating…" : "Create agent"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }

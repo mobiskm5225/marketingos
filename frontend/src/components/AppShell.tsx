@@ -6,12 +6,14 @@ import {
   LayoutDashboard,
   FileBarChart,
   Sparkles,
+  Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
 const nav = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/agents", label: "Agents", icon: Bot },
+  { to: "/skills", label: "Skills", icon: Wrench },
   { to: "/knowledge", label: "Knowledge", icon: Brain },
   { to: "/models", label: "Models", icon: Cpu },
   { to: "/runs", label: "Results", icon: FileBarChart },

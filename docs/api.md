@@ -2,7 +2,18 @@
 
 Base URL: `http://localhost:8000`
 
-All request/response bodies are JSON. All responses include `Content-Type: application/json`.
+All bodies are JSON. Responses are `application/json`.
+
+**No authentication.** Every endpoint is open. This is deliberate for now, and the reason the backend
+port is bound to `127.0.0.1` in `docker-compose.yml`. See
+[README → Open issues](./README.md#open-issues).
+
+**CORS.** Allowed origins come from `CORS_ORIGINS` (comma-separated), defaulting to
+`http://localhost:3000,http://localhost:5173`. Requests from other origins get no
+`Access-Control-Allow-Origin` header.
+
+Endpoints marked **planned** do not exist yet; the phase column says which build phase adds them.
+Everything else is live today.
 
 ---
 
@@ -10,382 +21,220 @@ All request/response bodies are JSON. All responses include `Content-Type: appli
 
 ### `GET /health`
 
-Returns server status. Use for uptime checks and load balancer probes.
-
-**Response `200`**
 ```json
 { "status": "ok" }
 ```
 
 ---
 
-## Webhook
+## Agents
 
-### `POST /webhook`
+### `GET /api/agents` — live
 
-Receives Notion webhook events. Returns `200` immediately; processing runs asynchronously in the background.
-
-**Headers**
-
-| Header | Required | Description |
-|---|---|---|
-| `x-notion-signature` | If `NOTION_WEBHOOK_SECRET` set | `v1,<hmac-sha256-hex>` |
-| `Content-Type` | Yes | `application/json` |
-
-**Signature Verification**
-
-If `NOTION_WEBHOOK_SECRET` is set in `.env`:
-- Extract hex from `v1,<hex>` header value
-- Compare `HMAC-SHA256(secret, rawBody)` using timing-safe comparison
-- Returns `401` if mismatch
-
-If `NOTION_WEBHOOK_SECRET` is empty, verification is skipped (suitable for local dev).
-
-**Verification Handshake**
-
-On first Notion webhook registration, Notion sends a handshake payload. The server detects and echoes it back automatically:
+Returns every agent with its knowledge bases and run statistics rolled up.
 
 ```json
-// Notion sends:
-{ "verification_token": "abc123..." }
-
-// Server responds:
-{ "verification_token": "abc123..." }
+[
+  {
+    "id": "atlas",
+    "name": "Atlas",
+    "role": "Campaign Strategist",
+    "description": "Turns a rough brief into a positioning angle, channel mix and a week-by-week campaign calendar.",
+    "status": "active",
+    "icon": "Megaphone",
+    "model": "claude-sonnet-4.5",
+    "skills": ["Positioning", "Channel planning", "Budget split", "ICP research"],
+    "knowledgeBases": ["Brand Bible", "Q3 Campaign Archive"],
+    "runs": 1,
+    "successRate": 0,
+    "lastRun": "2026-08-15 14:10:59.525282+00"
+  }
+]
 ```
 
-**Supported Event Types**
+`id` is the slug, not the UUID — the frontend routes on slugs. `runs`, `successRate` and `lastRun` are
+aggregates over the `runs` table, not stored columns. `successRate` counts only runs with status
+`complete`, so an agent whose single run is `needs review` reports 0.
 
-- `page.created`
-- `page.updated`
-- `page.content_updated`
-- `page.properties_updated`
+> `lastRun` currently returns a raw Postgres timestamp rather than ISO, because it comes from a
+> `MAX()` aggregate. Tracked as issue 5 in the README.
 
-All other event types are acknowledged (200) but not processed.
+### Planned
 
-**Processing Logic**
-
-```
-1. Parse entity.id (Notion page ID)
-2. Fetch page from Notion (retry 3× with 2s backoff)
-3. Skip if page.archived or page.in_trash
-4. Normalize parent.database_id (remove hyphens)
-5. If parent = BLOG_TRACKER_DATABASE_ID → Blog Tracker flow
-6. If parent = registered agent DB → check status = Pending → dispatch agent
-7. Otherwise → skip silently
-```
-
-**Blog Tracker flow:**
-1. Read `URL` property from page
-2. Extract Notion page ID from URL
-3. Fetch that blog page → get title
-4. Dedup check: skip if title already has a non-error SEO review
-5. Create entry in `NOTION_DATABASE_ID` with `SEO Status = Pending`
-6. Route to SEO Analyzer
-
-**Response `200`**
-```json
-{ "status": "accepted" }
-```
-
-**Response `401`**
-```json
-{ "error": "Invalid signature" }
-```
-
----
-
-## Ingest
-
-### `POST /ingest`
-
-Direct content ingestion. Creates a Notion page (if configured) and starts analysis. Returns immediately.
-
-**Headers**
-
-| Header | Required | Description |
-|---|---|---|
-| `x-ingest-secret` | If `INGEST_SECRET` set | Shared secret |
-| `Content-Type` | Yes | `application/json` |
-
-**Request Body**
-
-```json
-{
-  "title": "string (required)",
-  "content": "string (required)"
-}
-```
-
-**Response `200`**
-```json
-{
-  "status": "accepted",
-  "pageId": "notion-page-id",
-  "jobId": "uuid"
-}
-```
-
-**Response `401`**
-```json
-{ "error": "Unauthorized" }
-```
-
-**Response `400`**
-```json
-{ "error": "title and content are required" }
-```
-
----
-
-
-
-## Jobs
-
-### `GET /api/jobs`
-
-Paginated job list, newest first. All filters applied in SQL — pagination counts are accurate.
-
-**Query Parameters**
-
-| Param | Type | Default | Description |
+| Method | Path | Phase | Purpose |
 |---|---|---|---|
-| `limit` | number | 50 | Max records to return (hard cap: 200) |
-| `offset` | number | 0 | Pagination offset |
-| `agent` | string | — | Filter by `seo-analyzer` or `blog-reviewer` |
-| `status` | string | — | Filter by `pending`, `processing`, `done`, or `error` |
-| `q` | string | — | Title search (case-insensitive substring match) |
-
-**Response `200`**
-```json
-{
-  "jobs": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "agentName": "seo-analyzer",
-      "notionPageId": "abcdef1234567890abcdef1234567890",
-      "title": "Cloud Telephony Pricing in 2025",
-      "status": "done",
-      "inputTokens": 4218,
-      "outputTokens": 1847,
-      "costUsd": "0.029020",
-      "errorMessage": null,
-      "source": "webhook",
-      "createdAt": "2026-06-19T10:23:45.000Z",
-      "updatedAt": "2026-06-19T10:24:12.000Z"
-    }
-  ],
-  "limit": 50,
-  "offset": 0,
-  "total": 284
-}
-```
+| `GET` | `/api/agents/:slug` | 2 | Single agent |
+| `POST` | `/api/agents` | 2 | Create — `{ name, role, description, model }` |
+| `PATCH` | `/api/agents/:slug` | 2 | Update name, role, description, status, model, skills, prompt, temperature. Covers Pause/Activate and skill add/remove |
+| `DELETE` | `/api/agents/:slug` | 2 | Delete |
+| `PUT` | `/api/agents/:slug/knowledge-bases` | 2 | Replace links — `{ kbSlugs: [] }` |
+| `GET` | `/api/skills` | 2 | The skill library (currently hardcoded in the frontend) |
+| `POST` | `/api/agents/:slug/run` | 5 | Enqueue a run. Returns `202 { runSlug }` |
 
 ---
 
-### `GET /api/jobs/:id`
+## Knowledge
 
-Single job with full result content.
+### `GET /api/knowledge-bases` — live
 
-**Path Parameter**
+```json
+[
+  {
+    "id": "brand-bible",
+    "name": "Brand Bible",
+    "type": "Curated notes",
+    "source": "Notion",
+    "docs": 0,
+    "chunks": 0,
+    "updated": "2026-08-15T13:58:59.500Z",
+    "usedBy": ["Atlas", "Quill", "Echo"],
+    "icon": "BookOpen"
+  }
+]
+```
 
-| Param | Description |
-|---|---|
-| `id` | Job UUID |
+`type` is the memory layer: `Raw corpus`, `Curated notes` or `Distilled memory`. `docs` and `chunks`
+are counted from the `documents` and `chunks` tables — zero until ingestion runs in Phase 3.
 
-**Response `200`**
+### `GET /api/integrations` — live
+
+```json
+[
+  {
+    "id": "notion",
+    "name": "Notion",
+    "blurb": "Sync pages and databases from shared workspaces.",
+    "status": "connected",
+    "detail": "42 pages · synced 12m ago"
+  }
+]
+```
+
+### Planned
+
+| Method | Path | Phase | Purpose |
+|---|---|---|---|
+| `POST` | `/api/knowledge-bases` | 2 | Create — `{ name, type, source }` |
+| `PATCH` `DELETE` | `/api/knowledge-bases/:slug` | 2 | Update / delete |
+| `GET` | `/api/knowledge-bases/:slug/documents` | 2 | List documents in a base |
+| `POST` | `/api/knowledge-bases/:slug/documents` | 3 | Upload (multipart) → parse, chunk, embed |
+| `DELETE` | `/api/documents/:id` | 3 | Remove a document and its chunks |
+| `GET` | `/api/memory/layers` | 3 | The four layers with real counts + last distillation summary |
+| `POST` | `/api/memory/distill` | 3 | Queue a distillation pass |
+| `GET` `PUT` | `/api/memory/core` | 3 | Read / edit always-in-prompt core memory |
+| `POST` | `/api/knowledge-bases/sync` | 4 | Sync every base |
+| `POST` | `/api/knowledge-bases/:slug/sync` | 4 | Sync one base |
+| `POST` | `/api/integrations/:slug/connect` | 4 | Store connection config |
+| `POST` | `/api/integrations/:slug/sync` | 4 | Pull from the source |
+| `DELETE` | `/api/integrations/:slug/connect` | 4 | Disconnect |
+
+`msoffice` and `gdrive` return `501` from `connect` — both need OAuth, which needs auth.
+
+---
+
+## Models & settings
+
+### `GET /api/models` — live
+
+```json
+[
+  {
+    "id": "anthropic",
+    "name": "Anthropic Claude",
+    "kind": "Hosted API",
+    "models": ["claude-sonnet-4.5", "claude-opus-4.1", "claude-haiku-4"],
+    "status": "connected",
+    "note": "Default for strategy work"
+  }
+]
+```
+
+`kind` is `Hosted API` or `Open source`, which is what the Models page uses to pick its icon.
+
+### Planned
+
+| Method | Path | Phase | Purpose |
+|---|---|---|---|
+| `PATCH` | `/api/models/:slug` | 2 | Set API key (AES-256-GCM at rest, keyed by `ENCRYPTION_KEY`), base URL, default model. `status` flips to `connected` once a key exists |
+| `POST` | `/api/models/test` | 2 | Probe an OpenAI-compatible `GET {baseUrl}/v1/models` |
+| `GET` `PUT` | `/api/settings/run-defaults` | 2 | Temperature, local fallback, custom endpoint |
+
+API keys are never returned by any endpoint, only whether one is set.
+
+---
+
+## Runs
+
+### `GET /api/runs` — live · `GET /api/runs/:slug` — live
+
+Both return the same shape; the list is ordered newest first.
+
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "agentName": "seo-analyzer",
-  "notionPageId": "abcdef1234567890abcdef1234567890",
-  "title": "Cloud Telephony Pricing in 2025",
-  "status": "done",
-  "inputTokens": 4218,
-  "outputTokens": 1847,
-  "costUsd": "0.029020",
-  "errorMessage": null,
-  "source": "api",
-  "createdAt": "2026-06-19T10:23:45.000Z",
-  "updatedAt": "2026-06-19T10:24:12.000Z",
-  "results": [
+  "id": "run-2041",
+  "title": "Q4 launch campaign plan — Northstar 2.0",
+  "agent": "Atlas",
+  "status": "needs review",
+  "started": "2026-08-15T14:10:59.525Z",
+  "duration": "3m 41s",
+  "model": "claude-sonnet-4.5",
+  "summary": "A four-week launch plan anchored on the 'setup in an afternoon' angle…",
+  "metrics":  [{ "label": "Reach forecast", "value": "180k", "hint": "across 4 channels" }],
+  "sections": [{ "heading": "Positioning angle", "body": "…", "bullets": ["…"] }],
+  "sources":  [{ "name": "Brand Bible / Voice & tone", "kind": "Notion" }],
+  "attachments": [{ "name": "launch-timeline.png", "kind": "image", "size": "412 KB" }],
+  "comments": [
     {
-      "id": "661f9500-f30c-52e5-b827-557766551111",
-      "jobId": "550e8400-e29b-41d4-a716-446655440000",
-      "resultType": "seo_analysis",
-      "content": "# SEO Analysis: Cloud Telephony...\n\n...",
-      "createdAt": "2026-06-19T10:24:12.000Z"
+      "id": "c1",
+      "author": "Moballighul",
+      "initials": "MI",
+      "time": "2026-08-15T13:46:59.525Z",
+      "body": "Push paid to week two…",
+      "anchor": "Channel mix"
     }
   ]
 }
 ```
 
-**Response `404`**
-```json
-{ "error": "Job not found" }
-```
+`status` is `complete`, `running` or `needs review`. `sections` is what the agent produced — the
+Results page renders it generically, so any agent's output fits without special-casing. A comment's
+optional `anchor` ties it to a section heading.
+
+`GET /api/runs/:slug` returns `404 { "error": "Run not found" }` for an unknown slug.
+
+### Planned
+
+| Method | Path | Phase | Purpose |
+|---|---|---|---|
+| `POST` | `/api/runs/:slug/comments` | 2 | Add a review comment |
+| `POST` | `/api/runs/:slug/attachments` | 2 | Upload (multipart) |
+| `DELETE` | `/api/runs/:slug` | 2 | Delete a run |
+| `GET` | `/api/runs/:slug/events` | 5 | Live progress; the UI polls this every 3s while `running` |
+| `POST` | `/api/runs/:slug/rerun` | 5 | Re-run with comments folded in as revision instructions |
 
 ---
 
-### `GET /api/stats`
+## Activity
 
-Aggregated analytics. Used by the Dashboard page.
+### `GET /api/activity` — live
 
-**Response `200`**
+Newest first. Drives the Overview feed.
+
 ```json
-{
-  "totalJobs": 150,
-  "totalCostUsd": 45.25,
-  "thisMonthCostUsd": 12.50,
-  "errorRate": 5,
-  "byStatus": {
-    "done": 120,
-    "error": 8,
-    "processing": 2,
-    "pending": 20
-  },
-  "byAgent": {
-    "seo-analyzer": {
-      "jobs": 100,
-      "costUsd": 30.00
-    },
-    "blog-reviewer": {
-      "jobs": 50,
-      "costUsd": 15.25
-    }
-  }
-}
+[{ "id": "a1", "text": "Atlas finished Q4 launch campaign plan", "time": "2026-08-15T12:10:59.530Z" }]
 ```
 
-`errorRate` is a percentage (0–100), rounded to nearest integer.
-`thisMonthCostUsd` covers the current calendar month (UTC).
+Currently seeded. From Phase 5 the runtime writes these rows itself.
 
 ---
 
-## Agents
+## Conventions
 
-### `POST /api/agents/seo-analyzer`
+**Timestamps** are ISO 8601 UTC. The frontend formats them for display with `date-fns` — the API never
+returns "2h ago".
 
-Trigger SEO Analyzer directly. No Notion page required. Analysis result stored in PostgreSQL (`agentResults` table).
+**Identifiers**: URLs and payloads use slugs (`atlas`, `run-2041`, `brand-bible`). UUIDs stay internal.
 
-**Request Body**
-```json
-{
-  "title": "string (required)",
-  "content": "string (required — paste your draft blog text)",
-  "url": "string (optional — https://... for canonical analysis)"
-}
-```
-
-**Response `200`**
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "accepted"
-}
-```
-
-Processing is asynchronous. Poll `GET /api/jobs/:jobId` to track progress.
-
-**Response `400`**
-```json
-{ "error": "title and content are required" }
-```
-
-**Response `429`**
-```json
-{ "error": "Agent trigger limit reached. Maximum 20 triggers per hour per user." }
-```
-
-Rate limit: 20 triggers per hour per authenticated user (keyed on user ID).
-
----
-
-### `POST /api/agents/blog-reviewer`
-
-Trigger Existing Blog Reviewer directly. Crawls the live URL before analysis.
-
-**Request Body**
-```json
-{
-  "title": "string (required)",
-  "url": "string (required — must be publicly accessible)"
-}
-```
-
-**Response `200`**
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "accepted"
-}
-```
-
-**Response `400`**
-```json
-{ "error": "title and url are required" }
-```
-
-**Response `429`**
-```json
-{ "error": "Agent trigger limit reached. Maximum 20 triggers per hour per user." }
-```
-
-Rate limit: 20 triggers per hour per authenticated user (keyed on user ID).
-
----
-
-
-
-## Job Status Lifecycle
-
-```
-pending → processing → done
-                    ↘ error
-```
-
-| Status | Meaning |
-|---|---|
-| `pending` | Job created, not yet started |
-| `processing` | Agent is running (OpenAI call in progress) |
-| `done` | Analysis complete, results stored |
-| `error` | Agent failed — see `errorMessage` field |
-
----
-
-## Polling for Results
-
-After creating a job, poll until status is `done` or `error`:
-
-```javascript
-async function waitForJob(jobId) {
-  while (true) {
-    const res = await fetch(`/api/jobs/${jobId}`);
-    const job = await res.json();
-    if (job.status === 'done') return job;
-    if (job.status === 'error') throw new Error(job.errorMessage);
-    await new Promise(r => setTimeout(r, 3000)); // 3s poll
-  }
-}
-```
-
-The frontend does this automatically via TanStack Query `refetchInterval: 3000` when `status = processing | pending`.
-
----
-
-## Error Responses
-
-All error responses follow the same shape:
-
-```json
-{
-  "error": "Human-readable message"
-}
-```
-
-| HTTP Code | When |
-|---|---|
-| 400 | Missing required fields |
-| 401 | Invalid signature or secret |
-| 404 | Job not found |
-| 429 | Rate limit exceeded (login: 10/15 min per IP; agent triggers: 20/hr per user) |
-| 500 | Unexpected server error |
+**Errors** currently return `500 { "error": "<raw message>" }`, which leaks internals. Phase 2 replaces
+the per-route `try/catch` duplication with one error middleware that logs the detail and returns a
+generic message.

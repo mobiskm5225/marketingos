@@ -1,25 +1,32 @@
 import 'dotenv/config';
-import fs from 'fs';
 import path from 'path';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { sql } from 'drizzle-orm';
 import { pool } from '../src/core/db';
 
-// Runs every .sql file in migrations/ in filename order. All migrations are
-// idempotent (IF NOT EXISTS / ON CONFLICT), so re-running is safe.
-async function migrate() {
-  const dir = path.join(__dirname, '../src/core/db/migrations');
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
+// Drizzle's migrator reads migrations/meta/_journal.json and records what it has
+// applied in a __drizzle_migrations table, so re-running is safe and partial
+// migration sets resume correctly. Do not replace this with a raw glob over
+// *.sql — the generated files are not idempotent.
+async function main() {
+  const db = drizzle(pool);
 
-  for (const file of files) {
-    const sql = fs.readFileSync(path.join(dir, file), 'utf8');
-    console.log(`Running ${file}...`);
-    await pool.query(sql);
-  }
+  // pgvector backs chunk and fact embeddings. The extension has to exist before
+  // any migration declares a vector column.
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
 
-  console.log(`Migration complete — ${files.length} files applied.`);
-  await pool.end();
+  await migrate(db, {
+    migrationsFolder: path.join(__dirname, '../src/core/db/migrations'),
+  });
+
+  console.log('Migration complete.');
 }
 
-migrate().catch(err => {
-  console.error('Migration failed:', err.message);
-  process.exit(1);
-});
+main()
+  .then(() => pool.end())
+  .catch(async (err) => {
+    console.error('Migration failed:', err.message);
+    await pool.end();
+    process.exit(1);
+  });

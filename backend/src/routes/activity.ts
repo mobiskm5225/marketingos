@@ -5,7 +5,7 @@ import { desc } from 'drizzle-orm';
 
 const router = Router();
 
-router.get('/activity', async (req, res) => {
+router.get('/activity', async (_req, res, next) => {
   try {
     const allActivities = await db
       .select()
@@ -19,8 +19,8 @@ router.get('/activity', async (req, res) => {
     }));
     
     res.json(formatted);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    next(err);
   }
 });
 

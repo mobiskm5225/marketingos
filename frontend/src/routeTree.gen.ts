@@ -14,6 +14,7 @@ import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as ModelsRouteImport } from './routes/models'
 import { Route as RunsRouteImport } from './routes/runs'
+import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as RunsIndexRouteImport } from './routes/runs.index'
 import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
 
@@ -42,6 +43,11 @@ const RunsRoute = RunsRouteImport.update({
   path: '/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SkillsRoute = SkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RunsIndexRoute = RunsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/knowledge': typeof KnowledgeRoute
   '/models': typeof ModelsRoute
   '/runs': typeof RunsRouteWithChildren
+  '/skills': typeof SkillsRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/runs/': typeof RunsIndexRoute
 }
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/agents': typeof AgentsRoute
   '/knowledge': typeof KnowledgeRoute
   '/models': typeof ModelsRoute
+  '/skills': typeof SkillsRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/runs': typeof RunsIndexRoute
 }
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/knowledge': typeof KnowledgeRoute
   '/models': typeof ModelsRoute
   '/runs': typeof RunsRouteWithChildren
+  '/skills': typeof SkillsRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/runs/': typeof RunsIndexRoute
 }
@@ -88,10 +97,18 @@ export interface FileRouteTypes {
     | '/knowledge'
     | '/models'
     | '/runs'
+    | '/skills'
     | '/runs/$runId'
     | '/runs/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agents' | '/knowledge' | '/models' | '/runs/$runId' | '/runs'
+  to:
+    | '/'
+    | '/agents'
+    | '/knowledge'
+    | '/models'
+    | '/skills'
+    | '/runs/$runId'
+    | '/runs'
   id:
     | '__root__'
     | '/'
@@ -99,6 +116,7 @@ export interface FileRouteTypes {
     | '/knowledge'
     | '/models'
     | '/runs'
+    | '/skills'
     | '/runs/$runId'
     | '/runs/'
   fileRoutesById: FileRoutesById
@@ -109,6 +127,7 @@ export interface RootRouteChildren {
   KnowledgeRoute: typeof KnowledgeRoute
   ModelsRoute: typeof ModelsRoute
   RunsRoute: typeof RunsRouteWithChildren
+  SkillsRoute: typeof SkillsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -148,6 +167,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RunsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/skills': {
+      id: '/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof SkillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/runs/': {
       id: '/runs/'
       path: '/'
@@ -183,6 +209,7 @@ const rootRouteChildren: RootRouteChildren = {
   KnowledgeRoute: KnowledgeRoute,
   ModelsRoute: ModelsRoute,
   RunsRoute: RunsRouteWithChildren,
+  SkillsRoute: SkillsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

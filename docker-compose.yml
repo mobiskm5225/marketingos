@@ -1,12 +1,16 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector image, not plain postgres — chunk and fact embeddings need the extension.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: acefone
       POSTGRES_USER: acefone
       POSTGRES_PASSWORD: acefone
     ports:
-      - "5432:5432"
+      # 5433 on the host: a local Homebrew Postgres commonly holds 5432 and would
+      # shadow this container for localhost connections. In-network services
+      # still talk to postgres:5432.
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -17,21 +21,17 @@ services:
       timeout: 5s
       retries: 10
 
-  migrate:
-    image: postgres:16-alpine
-    volumes:
-      - ./backend/src/core/db/migrations:/migrations:ro
+  # One-shot: migrate, then seed only if the database is empty. Runs to
+  # completion on every `up`; the backend waits for it to exit successfully.
+  init:
+    build: ./backend
+    # Compiled JS, not the npm scripts — tsx is a devDependency and the runner
+    # stage installs with --omit=dev.
+    # Drizzle's migrator tracks applied migrations, and --if-empty stops the seed
+    # from wiping real data on the second and later boots.
+    command: sh -c "node dist/scripts/migrate.js && node dist/scripts/seed.js --if-empty"
     environment:
-      PGPASSWORD: acefone
-    command: >
-      sh -c "
-        until pg_isready -h postgres -U acefone -d acefone; do sleep 1; done &&
-        for f in /migrations/*.sql; do
-          echo \"Running $$f\" &&
-          psql -h postgres -U acefone -d acefone -f $$f;
-        done &&
-        echo 'Migrations complete'
-      "
+      DATABASE_URL: postgresql://acefone:acefone@postgres:5432/acefone
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,25 +41,57 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      # Loopback-bound on purpose: the API has no auth yet and holds provider
+      # API keys. Do not widen this to 0.0.0.0 until the auth phase lands.
+      # Both stacks are published because browsers resolve "localhost" to ::1
+      # first — IPv4-only would make every client-side fetch fail while SSR
+      # (which goes over the Docker network) kept working.
+      - "127.0.0.1:8000:8000"
+      - "[::1]:8000:8000"
     env_file: ./backend/.env
     environment:
       DATABASE_URL: postgresql://acefone:acefone@postgres:5432/acefone
+      CORS_ORIGINS: http://localhost:3000
+      OBSIDIAN_VAULT_ROOT: /vaults
+    volumes:
+      # Obsidian vaults, read-only. The container cannot see the host filesystem
+      # otherwise, so a vault has to be mounted before it can be indexed.
+      # Point OBSIDIAN_VAULT_HOST_PATH at the folder holding your vault(s);
+      # inside the app you then reference a vault by its name under /vaults.
+      - ${OBSIDIAN_VAULT_HOST_PATH:-./vaults}:/vaults:ro
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
+      init:
         condition: service_completed_successfully
+    healthcheck:
+      # The frontend renders server-side on first paint and calls the API while
+      # doing it, so it must not start before the API answers.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
     networks:
       - mi
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Baked into the client bundle at build time, so it must be the URL the
+        # browser can reach — not the in-network service name.
+        VITE_API_URL: http://localhost:8000/api
     ports:
-      - "3000:80"
+      - "3000:3000"
+    environment:
+      # Server-side (SSR) address. "localhost" here would be the frontend
+      # container itself, so loaders must call the backend by service name.
+      INTERNAL_API_URL: http://backend:8000/api
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - mi
     restart: unless-stopped

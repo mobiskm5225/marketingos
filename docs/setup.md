@@ -4,304 +4,213 @@
 
 | Tool | Version | Check |
 |---|---|---|
-| Node.js | 18+ | `node --version` |
+| Node.js | 22+ | `node --version` |
 | npm | 9+ | `npm --version` |
 | Docker Desktop | any | `docker --version` |
 | Git | any | `git --version` |
 
-You also need:
-- **OpenAI API key** with access to `gpt-4o`
-- **Notion Integration Token** (Internal Integration, not public)
-- **Notion Database IDs** for the databases the agents will watch
+An **OpenAI API key** is needed for embeddings and model calls once Phase 3 lands. The app boots and
+serves seeded data without one.
 
 ---
 
-## 1. Clone & Checkout
+## 1. Clone
 
 ```bash
-git clone https://github.com/Moballigh5225/marketing-os.git acefone-intelligence
-cd acefone-intelligence
+git clone https://github.com/Moballigh5225/marketing-os.git
+cd marketing-os
 git checkout release/0.5.0
 ```
 
-> **Important:** `main` is intentionally empty. All code lives on `release/0.5.0`.
-> For new features, branch off `release/0.5.0`:
-> ```bash
-> git checkout release/0.5.0
-> git checkout -b feature/your-feature
-> ```
+`main` is not used. Branch features from `release/0.5.0`.
 
 ---
 
-## 2. Environment Variables
+## 2. Environment
 
 ```bash
 cp .env.example backend/.env
 ```
 
-Open `backend/.env` and fill in:
+Only two variables matter to boot:
 
 ```env
-# Server
 PORT=8000
-
-# Auth — required
-JWT_SECRET=change-this-to-a-long-random-string
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=changeme
-
-# Database (works as-is with Docker Compose defaults)
-DATABASE_URL=postgresql://acefone:acefone@localhost:5432/acefone
-
-# OpenAI
-OPENAI_API_KEY=sk-...
-
-# Notion — Required
-NOTION_API_KEY=secret_...
-NOTION_DATABASE_ID=<32-char-hex-id>         # SEO Reviews DB
-
-# Notion — Optional
-NOTION_WEBHOOK_SECRET=                       # Leave empty to skip HMAC check
-INGEST_SECRET=                               # Leave empty to skip /ingest auth
-BLOG_TRACKER_DATABASE_ID=                    # Blog Tracker DB
-BLOG_REVIEW_DB_ID=                           # Blog Reviews Queue DB
+DATABASE_URL=postgresql://acefone:acefone@localhost:5433/acefone
 ```
 
-### Finding Notion Database IDs
+> **Port 5433, not 5432.** The Postgres container publishes on 5433 because a local Homebrew or
+> Postgres.app install commonly holds 5432 and silently wins for `localhost` connections — which
+> means migrations appear to succeed against the wrong database. Inside Docker, services still reach
+> it as `postgres:5432`.
 
-1. Open the Notion database in browser
-2. URL: `https://notion.so/workspace/abcdef1234567890abcdef1234567890?v=...`
-3. 32-character hex string = database ID
-4. Paste into `.env` (with or without hyphens — backend normalizes both)
+Optional, per phase:
 
-### Connecting the Notion Integration
+```env
+OPENAI_API_KEY=sk-...        # embeddings + model calls (Phase 3+)
+ENCRYPTION_KEY=              # 32-byte hex; encrypts stored provider API keys (Phase 2+)
+NOTION_API_KEY=secret_...    # Notion knowledge source (Phase 4)
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
 
-For each database the agents read/write:
-1. Open database in Notion → `···` (top right) → **Connections** → **Add connections**
-2. Search for your integration → Connect
+Generate the encryption key with `openssl rand -hex 32`.
 
-Without this, the API returns `object_not_found`.
+`backend/.env` is gitignored. Keep it that way — it holds provider credentials.
 
 ---
 
-## Option A — Docker (recommended for collaboration)
+## Option A — Local dev (hot reload)
 
-Run the full stack (Postgres + backend + frontend) in one command:
+```bash
+# 1. Install
+cd backend  && npm install
+cd ../frontend && npm install
+
+# 2. Start Postgres (pgvector image)
+cd .. && docker compose up -d postgres
+
+# 3. Migrate and seed
+cd backend
+npm run db:migrate     # applies migrations + creates the vector extension
+npm run seed           # loads demo agents, bases, models, runs
+
+# 4. Backend
+npm run dev            # → Server running on port 8000
+
+# 5. Frontend (new terminal)
+cd frontend && npm run dev
+```
+
+| URL | Service |
+|---|---|
+| `http://localhost:8081` | Frontend |
+| `http://localhost:8000` | Backend API |
+| `localhost:5433` | PostgreSQL |
+
+Verify:
+
+```bash
+curl http://localhost:8000/health           # {"status":"ok"}
+curl http://localhost:8000/api/agents       # 5 seeded agents
+docker compose exec postgres \
+  psql -U acefone -d acefone -tc "SELECT extname FROM pg_extension WHERE extname='vector';"
+```
+
+There is no login — the app has no auth yet.
+
+---
+
+## Option B — Docker (full stack)
 
 ```bash
 docker compose up --build
 ```
 
+Brings up Postgres, runs migrations as a one-shot service, then starts the backend and the
+SSR frontend. Migrations are tracked in `__drizzle_migrations`, so repeat boots are safe.
+
 | URL | Service |
 |---|---|
-| `http://localhost:3000` | React frontend |
-| `http://localhost:8000` | Express backend |
-| `localhost:5432` | PostgreSQL |
+| `http://localhost:3000` | Frontend |
+| `http://localhost:8000` | Backend API |
 
-**First run only — run migrations:**
+Seed the demo data once:
+
 ```bash
-docker compose exec backend npm run db:migrate
+docker compose exec backend node dist/scripts/seed.js
 ```
 
 **Stop:**
-```bash
-docker compose down          # keep data
-docker compose down -v       # wipe data too
-```
-
-> In Docker, nginx handles `/api` and `/auth` proxying — Vite is not used. No extra config needed.
-
----
-
-## Option B — Local Dev (hot reload)
-
-### 3. Install Dependencies
 
 ```bash
-cd backend && npm install
-cd ../frontend && npm install
-```
-
-### 4. Start PostgreSQL
-
-```bash
-# From repo root
-docker compose up -d postgres
-```
-
-### 5. Run Migrations
-
-```bash
-cd backend && npm run db:migrate
-```
-
-### 6. Start Backend
-
-```bash
-cd backend && npm run dev
-```
-
-Expected: `Server running on port 8000`
-
-Verify: `curl http://localhost:8000/health` → `{"status":"ok"}`
-
-### 7. Start Frontend
-
-```bash
-cd frontend && npm run dev
-```
-
-Open `http://localhost:3000` — login page appears.
-
-Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
-
----
-
-## 8. Test an Agent Run
-
-### Web UI
-
-1. Login at `http://localhost:3000`
-2. Go to **Trigger Agent**
-3. Select **SEO Analyzer**, enter title + content (300+ words)
-4. Click **Run SEO Analysis** → redirected to job detail, auto-refreshes until done
-
-### cURL
-
-All `/api/*` routes require a JWT. Get a token first:
-
-```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"changeme"}' | \
-  grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-```
-
-Trigger agent:
-```bash
-curl -X POST http://localhost:8000/api/agents/seo-analyzer \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"title":"Cloud Telephony Guide","content":"..."}'
-```
-
-Check job:
-```bash
-curl http://localhost:8000/api/jobs/<jobId> \
-  -H "Authorization: Bearer $TOKEN"
-```
-
----
-
-## 9. Set Up Notion Webhook (optional)
-
-For Notion pages to trigger agents automatically:
-
-```bash
-# Install ngrok (Windows)
-winget install ngrok
-
-# Start tunnel
-ngrok http 8000
-```
-
-Copy the HTTPS URL: `https://xxxx.ngrok-free.app`
-
-In Notion → your integration → **Webhooks**:
-- URL: `https://xxxx.ngrok-free.app/webhook`
-- Events: `page.created`, `page.updated`, `page.properties_updated`
-- Copy signing secret → `NOTION_WEBHOOK_SECRET` in `.env` → restart backend
-
----
-
-## Stopping Everything
-
-```bash
-# Local dev: Ctrl+C in each terminal, then:
-docker compose stop       # stop postgres (keeps data)
-docker compose down -v    # stop + wipe data
-
-# Docker full stack:
 docker compose down       # keep data
-docker compose down -v    # wipe data
+docker compose down -v    # wipe data too
 ```
+
+> The backend publishes on `127.0.0.1:8000`, not `0.0.0.0`. The API has no auth and will hold provider
+> API keys — do not widen that binding or put it behind a public proxy until auth exists.
 
 ---
 
-## Resetting the Database
+## Resetting the database
 
 ```bash
 docker compose down -v
-docker compose up -d postgres       # or: docker compose up -d
-cd backend && npm run db:migrate
+docker compose up -d postgres
+cd backend && npm run db:migrate && npm run seed
 ```
+
+---
+
+## Schema changes
+
+```bash
+cd backend
+# edit src/core/db/schema.ts
+npx drizzle-kit generate     # writes a new migration + updates meta/_journal.json
+npm run db:migrate           # apply it
+```
+
+Commit the generated `.sql` **and** the `meta/` files together. The migrator reads the journal to know
+what to apply; without it the migration is invisible.
 
 ---
 
 ## Troubleshooting
 
-### `username and password are required` on login
+### `extension "vector" is not available`
 
-Backend not restarted after adding `ADMIN_USERNAME`/`ADMIN_PASSWORD` to `.env`. Restart backend.
+Migrations reached the wrong Postgres. A local install is holding the port and shadowing the
+container.
 
-### `401 Unauthorized` on `/api/*`
-
-Token missing or expired. Log out and log back in — fresh 7-day token issued on login.
-
-### `404` on `/auth/login` (local dev only)
-
-Vite proxy must include `/auth`. Check `frontend/vite.config.ts`:
-```ts
-proxy: {
-  '/api':  'http://localhost:8000',
-  '/auth': 'http://localhost:8000',
-}
-```
-Restart Vite after any proxy change.
-
-### `ECONNREFUSED` connecting to PostgreSQL
-
-- `docker ps` — confirm postgres container running
-- Port 5432 not in use by another instance
-- `DATABASE_URL` in `.env` matches `docker-compose.yml` values
-
-### `object_not_found` from Notion API
-
-Integration not connected to the database. Database → `···` → **Connections** → add integration.
-
-### `401 Unauthorized` on webhook
-
-`NOTION_WEBHOOK_SECRET` mismatch. Leave it empty to disable HMAC check for local dev.
-
-### Agent stuck in `processing`
-
-Manually reset in PostgreSQL:
-```sql
-UPDATE agent_jobs
-SET status = 'error', error_message = 'Manually reset'
-WHERE status = 'processing'
-  AND updated_at < now() - interval '10 minutes';
+```bash
+lsof -nP -iTCP:5432 -sTCP:LISTEN     # anything here that is not Docker is the culprit
 ```
 
-### `429 Too Many Requests` on login
+Confirm `DATABASE_URL` in `backend/.env` says **5433**, then re-run `npm run db:migrate`.
 
-Login rate limit reached: 10 attempts per 15 minutes per IP. Wait 15 minutes, then retry. Limit resets automatically.
+### API returns stale or unexpected data
 
-In local dev, rate limit applies to `localhost` too. If hitting it during testing, restart the backend process to reset the in-memory counter.
+Check for an old backend process still holding port 8000 — several can accumulate across sessions, and
+the oldest keeps the port while newer ones fail to bind.
 
-### OpenAI `429 Too Many Requests`
-
-GPT-4o rate limit hit. Wait and retry, or upgrade OpenAI usage tier.
-
----
-
-## Git Workflow
-
-```
-main              — empty, do not use
-release/0.5.0     — stable, all development branches from here
-feature/*         — new features
-fix/*             — bug fixes
+```bash
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+pkill -f "tsx/cjs src/index.ts"
 ```
 
-Always branch from `release/0.5.0`, never from `main`.
+### `ECONNREFUSED` connecting to Postgres
+
+```bash
+docker compose ps                    # is the container running?
+docker compose logs postgres
+```
+
+Confirm the port in `DATABASE_URL` matches the published port in `docker-compose.yml`.
+
+### Migration fails on re-run with "already exists"
+
+The migrator tracks state in `__drizzle_migrations`. If that table was dropped while the tables
+remained, it will try to re-apply from scratch. Easiest fix is a clean reset (above).
+
+### Frontend builds a `wrangler.json` instead of a server
+
+Nitro auto-detected a Cloudflare preset. Set `NITRO_PRESET=node-server` before `npm run build` — the
+Dockerfile already does.
+
+### Frontend loads but every page is empty
+
+The API is unreachable or the origin is blocked. Check the backend is up, then confirm the request
+origin is in `CORS_ORIGINS`:
+
+```bash
+curl -s -D- -o /dev/null -H "Origin: http://localhost:8081" localhost:8000/api/agents \
+  | grep -i access-control-allow-origin
+```
+
+Vite's dev port varies (8080, 8081, …), so add whichever it picked.
+
+### `429 Too Many Requests`
+
+`express-rate-limit` is applied. Restart the backend to reset the in-memory counter during local
+testing.

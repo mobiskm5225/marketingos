@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Clock, Cpu } from "lucide-react";
+import { Clock, Cpu, FileBarChart } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
@@ -31,6 +31,16 @@ function RunsPage() {
   return (
     <AppShell title="Results" subtitle="What the agents produced, and what still needs a human.">
       <div className="space-y-4">
+        {runs.length === 0 && (
+          <div className="panel flex flex-col items-center gap-2 border-dashed p-10 text-center">
+            <FileBarChart className="size-6 text-primary" />
+            <p className="font-medium">No results yet</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Every agent run lands here with its report, the sources it used and any review
+              comments. Run an agent to see the first one.
+            </p>
+          </div>
+        )}
         {runs.map((run) => (
           <Link
             key={run.id}

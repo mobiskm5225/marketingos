@@ -1,124 +1,72 @@
 import 'dotenv/config';
-import { db } from '../src/core/db';
-import { agents, knowledgeBases, agentKnowledgeBases, modelProviders, integrations, runs, activities } from '../src/core/db/schema';
-// @ts-ignore - The mock data doesn't type check perfectly because icons are functions, but we just want the strings for the seed
-import { agents as mockAgents, knowledgeBases as mockKbs, modelProviders as mockModels, integrations as mockIntegrations, runs as mockRuns, activity as mockActivity } from '../../frontend/src/data/marketing-os';
+import { db, pool } from '../src/core/db';
+import { modelProviders, integrations, categories } from '../src/core/db/schema';
+import {
+  modelProviders as catalogProviders,
+  integrations as catalogIntegrations,
+  categories as catalogCategories,
+} from './seed-data';
 
+/**
+ * Loads reference data only — model providers and integrations. It never creates
+ * agents, knowledge bases or runs: those belong to the user.
+ *
+ * Existing rows are left alone, so a provider you have already configured keeps
+ * its API key and `connected` status across runs. Only missing rows are added.
+ */
 async function main() {
-  console.log('🌱 Seeding database with Marketing OS mock data...');
+  // Every insert below is onConflictDoNothing, so this is safe to run on every
+  // container boot and safe to re-run after the catalog gains new entries. An
+  // early "already seeded, skip" check would silently withhold newly added rows
+  // (categories, providers) from an existing install. --if-empty is still
+  // accepted so the compose command keeps working.
+  console.log('Loading reference catalog...');
 
-  // 1. Clear existing data
-  console.log('Clearing existing data...');
-  await db.delete(activities);
-  await db.delete(runs);
-  await db.delete(agentKnowledgeBases);
-  await db.delete(knowledgeBases);
-  await db.delete(agents);
-  await db.delete(modelProviders);
-  await db.delete(integrations);
-
-  // 2. Seed Agents
-  console.log('Seeding agents...');
-  const agentIdMap: Record<string, string> = {};
-  for (const agent of mockAgents) {
-    const [inserted] = await db.insert(agents).values({
-      slug: agent.id,
-      name: agent.name,
-      role: agent.role,
-      description: agent.description,
-      status: agent.status,
-      icon: agent.icon?.displayName || agent.icon?.name || 'Bot', // Best effort extract icon name
-      model: agent.model,
-      skills: agent.skills,
-    }).returning({ id: agents.id });
-    agentIdMap[agent.name] = inserted.id; // Map for KBs and Runs
+  for (const [i, category] of catalogCategories.entries()) {
+    await db
+      .insert(categories)
+      .values({ slug: category.slug, name: category.name, position: i })
+      .onConflictDoNothing({ target: categories.slug });
   }
 
-  // 3. Seed Knowledge Bases
-  console.log('Seeding knowledge bases...');
-  const kbIdMap: Record<string, string> = {};
-  for (const kb of mockKbs) {
-    const [inserted] = await db.insert(knowledgeBases).values({
-      slug: kb.id,
-      name: kb.name,
-      type: kb.type,
-      source: kb.source,
-      docsCount: kb.docs,
-      chunksCount: kb.chunks,
-      icon: kb.icon?.displayName || kb.icon?.name || 'FileText',
-    }).returning({ id: knowledgeBases.id });
-    kbIdMap[kb.name] = inserted.id;
-    
-    // Link to agents (mock data says usedBy: ["Atlas", "Quill"])
-    for (const agentName of kb.usedBy) {
-      if (agentIdMap[agentName]) {
-        await db.insert(agentKnowledgeBases).values({
-          agentId: agentIdMap[agentName],
-          kbId: inserted.id,
-        });
-      }
-    }
+  for (const provider of catalogProviders) {
+    await db
+      .insert(modelProviders)
+      .values({
+        slug: provider.id,
+        name: provider.name,
+        kind: provider.kind,
+        models: provider.models,
+        status: 'available',
+        note: provider.note,
+      })
+      .onConflictDoNothing({ target: modelProviders.slug });
   }
 
-  // 4. Seed Models & Integrations
-  console.log('Seeding models & integrations...');
-  for (const model of mockModels) {
-    await db.insert(modelProviders).values({
-      slug: model.id,
-      name: model.name,
-      kind: model.kind,
-      models: model.models,
-      status: model.status,
-      note: model.note,
-    });
-  }
-  
-  for (const integration of mockIntegrations) {
-    await db.insert(integrations).values({
-      slug: integration.id,
-      name: integration.name,
-      blurb: integration.blurb,
-      status: integration.status,
-      detail: integration.detail,
-    });
+  for (const integration of catalogIntegrations) {
+    await db
+      .insert(integrations)
+      .values({
+        slug: integration.id,
+        name: integration.name,
+        blurb: integration.blurb,
+        status: 'available',
+        detail: integration.detail,
+      })
+      .onConflictDoNothing({ target: integrations.slug });
   }
 
-  // 5. Seed Runs
-  console.log('Seeding runs...');
-  for (const run of mockRuns) {
-    const agentId = agentIdMap[run.agent] || Object.values(agentIdMap)[0]; // Fallback to first if not found
-    await db.insert(runs).values({
-      slug: run.id,
-      title: run.title,
-      agentId,
-      status: run.status,
-      startedAt: new Date(), // Mock says "Today, 09:12", we'll just use now()
-      duration: run.duration,
-      model: run.model,
-      summary: run.summary,
-      metrics: run.metrics,
-      sections: run.sections,
-      sources: run.sources,
-      attachments: run.attachments,
-      comments: run.comments,
-    });
-  }
-
-  // 6. Seed Activities
-  console.log('Seeding activities...');
-  for (const a of mockActivity) {
-    await db.insert(activities).values({
-      slug: a.id,
-      text: a.text,
-    });
-  }
-
-  console.log('✅ Seeding complete!');
-  process.exit(0);
+  console.log(
+    `✅ Catalog ready — ${catalogCategories.length} categories, ${catalogProviders.length} model providers, ${catalogIntegrations.length} integrations.`,
+  );
+  console.log('No agents, knowledge bases or runs created. Add those through the app.');
 }
 
-main().catch((e) => {
-  console.error('❌ Seeding failed:');
-  console.error(e);
-  process.exit(1);
-});
+main()
+  .then(() => pool.end())
+  .catch(async (err) => {
+    console.error('❌ Seeding failed:');
+    console.error(err);
+    await pool.end();
+    process.exit(1);
+  });

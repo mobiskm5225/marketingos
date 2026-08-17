@@ -63,7 +63,7 @@ function Index() {
         <section className="panel hero-gradient p-6">
           <p className="text-xs uppercase tracking-widest text-primary">Northstar workspace</p>
           <h2 className="mt-2 max-w-2xl text-2xl font-semibold">
-            Five agents, four knowledge bases, one place to review the work.
+            Your agents, your knowledge, one place to review the work.
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Give an agent skills, point it at the memory you trust, pick a model, then read the
@@ -89,42 +89,52 @@ function Index() {
                 All results <ArrowRight className="size-3.5" />
               </Link>
             </div>
-            <ul className="mt-4 divide-y divide-border">
-              {runs.map((run) => (
-                <li key={run.id}>
-                  <Link
-                    to="/runs/$runId"
-                    params={{ runId: run.id }}
-                    className="flex items-center justify-between gap-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{run.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {run.agent} · {run.started} · {run.duration}
-                      </p>
-                    </div>
-                    <Badge variant={run.status === "complete" ? "secondary" : "outline"}>
-                      {run.status}
-                    </Badge>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {runs.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                No runs yet. Create an agent and run it — its report will appear here.
+              </p>
+            ) : (
+              <ul className="mt-4 divide-y divide-border">
+                {runs.map((run) => (
+                  <li key={run.id}>
+                    <Link
+                      to="/runs/$runId"
+                      params={{ runId: run.id }}
+                      className="flex items-center justify-between gap-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{run.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {run.agent} · {run.started} · {run.duration}
+                        </p>
+                      </div>
+                      <Badge variant={run.status === "complete" ? "secondary" : "outline"}>
+                        {run.status}
+                      </Badge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="panel p-5">
             <h3 className="font-semibold">Activity</h3>
-            <ul className="mt-4 space-y-4">
-              {activity.map((a) => (
-                <li key={a.id} className="flex gap-3 text-sm">
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                  <div>
-                    <p>{a.text}</p>
-                    <p className="text-xs text-muted-foreground">{a.time}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {activity.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">Nothing has happened yet.</p>
+            ) : (
+              <ul className="mt-4 space-y-4">
+                {activity.map((a) => (
+                  <li key={a.id} className="flex gap-3 text-sm">
+                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+                    <div>
+                      <p>{a.text}</p>
+                      <p className="text-xs text-muted-foreground">{a.time}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       </div>

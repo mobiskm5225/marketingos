@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { safeFetch } from './safe-fetch';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 
@@ -17,16 +18,12 @@ export interface CrawlResult {
 }
 
 export async function crawlUrl(url: string): Promise<CrawlResult> {
-  const response = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AcefoneBot/1.0)' },
-    signal: AbortSignal.timeout(15000),
+  // safeFetch, not fetch: crawl targets are user-supplied, so the address has to
+  // be validated against private and link-local ranges — including on every
+  // redirect hop — before any request goes out.
+  const html = await safeFetch(url, {
+    userAgent: 'Mozilla/5.0 (compatible; MarketingOSBot/1.0)',
   });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} fetching ${url}`);
-  }
-
-  const html = await response.text();
   const $ = cheerio.load(html);
 
   // Extract SEO metadata

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, FileText, ImageIcon, Paperclip, Send } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { api, type Run } from "@/lib/api";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/runs/$runId")({
   loader: async ({ params }) => {
@@ -34,18 +34,26 @@ export const Route = createFileRoute("/runs/$runId")({
 
 function RunDetail() {
   const { run } = Route.useLoaderData();
+  const router = useRouter();
   const [comments, setComments] = useState(run.comments);
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState(run.attachments);
+  const [busy, setBusy] = useState(false);
 
-  const post = () => {
+  const post = async () => {
     if (!draft.trim()) return;
-    setComments((prev) => [
-      ...prev,
-      { id: `c${prev.length + 1}`, author: "You", initials: "YO", time: "just now", body: draft },
-    ]);
-    setDraft("");
-    toast.success("Comment added — agent will re-run affected sections");
+    setBusy(true);
+    try {
+      const created = await api.addComment(run.id, draft);
+      setComments((prev) => [...prev, created]);
+      setDraft("");
+      toast.success("Comment added");
+      await router.invalidate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not add the comment");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -59,7 +67,11 @@ function RunDetail() {
               <ArrowLeft className="size-4" /> All results
             </Link>
           </Button>
-          <Button onClick={() => toast.success("Re-run queued with the latest comments")}>
+          <Button
+            disabled
+            title="Available once the pipeline runtime ships"
+            onClick={() => {}}
+          >
             Re-run with edits
           </Button>
         </div>
@@ -164,20 +176,26 @@ function RunDetail() {
                   type="file"
                   multiple
                   className="hidden"
-                  onChange={(e) => {
-                    const added = Array.from(e.target.files ?? []).map((f) => ({
-                      name: f.name,
-                      kind: (f.type.startsWith("image/") ? "image" : "doc") as "image" | "doc",
-                      size: `${Math.max(1, Math.round(f.size / 1024))} KB`,
-                    }));
-                    if (added.length) {
-                      setAttachments((prev) => [...prev, ...added]);
-                      toast.success(`${added.length} file(s) attached`);
+                  disabled={busy}
+                  onChange={async (e) => {
+                    const picked = Array.from(e.target.files ?? []);
+                    if (picked.length === 0) return;
+                    setBusy(true);
+                    try {
+                      const { attachments: saved } = await api.uploadRunAttachments(run.id, picked);
+                      setAttachments((prev) => [...prev, ...saved]);
+                      toast.success(`${saved.length} file(s) attached`);
+                      await router.invalidate();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Upload failed");
+                    } finally {
+                      setBusy(false);
+                      e.target.value = "";
                     }
                   }}
                 />
               </label>
-              <Button size="sm" onClick={post}>
+              <Button size="sm" disabled={busy} onClick={post}>
                 <Send className="size-3.5" /> Comment
               </Button>
             </div>
