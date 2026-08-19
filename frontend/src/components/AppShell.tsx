@@ -34,7 +34,7 @@ export function AppShell({
     <div className="min-h-screen">
       <div className="flex min-h-screen w-full">
         {/* ── Desktop sidebar ── */}
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 md:flex">
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar px-4 py-6 md:flex">
           <Link to="/" className="mb-8 flex items-center gap-2 px-2">
             <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Sparkles className="size-4" />
