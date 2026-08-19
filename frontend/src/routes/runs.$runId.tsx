@@ -1,12 +1,24 @@
-import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowLeft, FileText, ImageIcon, Paperclip, Send } from "lucide-react";
+import { createFileRoute, Link, notFound, useNavigate, useRouter } from "@tanstack/react-router";
+import { useEffect, useState, useRef } from "react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Circle,
+  FileText,
+  ImageIcon,
+  Loader2,
+  Paperclip,
+  RefreshCw,
+  Send,
+  XCircle,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Markdown } from "@/components/Markdown";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, type RunStage } from "@/lib/api";
 
 export const Route = createFileRoute("/runs/$runId")({
   loader: async ({ params }) => {
@@ -32,13 +44,126 @@ export const Route = createFileRoute("/runs/$runId")({
   component: RunDetail,
 });
 
+function stageIcon(status: string) {
+  switch (status) {
+    case "complete":
+      return <CheckCircle2 className="size-4 text-green-500" />;
+    case "running":
+      return <Loader2 className="size-4 animate-spin text-primary" />;
+    case "error":
+    case "failed":
+      return <XCircle className="size-4 text-destructive" />;
+    default:
+      return <Circle className="size-4 text-muted-foreground" />;
+  }
+}
+
 function RunDetail() {
-  const { run } = Route.useLoaderData();
+  const { run: initialRun } = Route.useLoaderData();
   const router = useRouter();
-  const [comments, setComments] = useState(run.comments);
+  const navigate = useNavigate();
+  const [run, setRun] = useState(initialRun);
+  const [comments, setComments] = useState(initialRun.comments);
   const [draft, setDraft] = useState("");
-  const [attachments, setAttachments] = useState(run.attachments);
+  const [attachments, setAttachments] = useState(initialRun.attachments);
+  const [stages, setStages] = useState<RunStage[]>(initialRun.stages ?? []);
   const [busy, setBusy] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // SSE: connect when run is in progress
+  useEffect(() => {
+    if (run.status !== "running" && run.status !== "pending") return;
+
+    const es = api.streamRunEvents(run.id);
+    eventSourceRef.current = es;
+
+    es.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "stage_started") {
+          setStages((prev) => {
+            const existing = prev.find((s) => s.name === data.data?.name);
+            if (existing) {
+              return prev.map((s) =>
+                s.name === data.data?.name ? { ...s, status: "running" as const } : s,
+              );
+            }
+            return [
+              ...prev,
+              {
+                id: data.data?.stageId ?? crypto.randomUUID(),
+                name: data.data?.name ?? "Stage",
+                position: data.data?.position ?? prev.length + 1,
+                status: "running" as const,
+                attempt: 1,
+                model: null,
+                inputTokens: 0,
+                outputTokens: 0,
+                costUsd: "0",
+                output: null,
+                error: null,
+                startedAt: data.timestamp,
+                finishedAt: null,
+              },
+            ];
+          });
+        }
+
+        if (data.type === "stage_complete") {
+          setStages((prev) =>
+            prev.map((s) =>
+              s.name === data.data?.name
+                ? {
+                    ...s,
+                    status: "complete" as const,
+                    model: data.data?.model ?? s.model,
+                    inputTokens: data.data?.inputTokens ?? s.inputTokens,
+                    outputTokens: data.data?.outputTokens ?? s.outputTokens,
+                    costUsd: String(data.data?.costUsd ?? s.costUsd),
+                    finishedAt: data.timestamp,
+                  }
+                : s,
+            ),
+          );
+        }
+
+        if (data.type === "stage_error" || data.type === "gate_failed") {
+          setStages((prev) =>
+            prev.map((s) =>
+              s.name === data.data?.name
+                ? { ...s, status: "error" as const, error: data.data?.error ?? data.data?.reason ?? null }
+                : s,
+            ),
+          );
+        }
+
+        if (data.type === "run_complete" || data.type === "run_error" || data.type === "stream_end") {
+          es.close();
+          // Refresh the full run data
+          try {
+            const refreshed = await api.getRun(run.id);
+            setRun(refreshed);
+            setComments(refreshed.comments);
+            setAttachments(refreshed.attachments);
+            setStages(refreshed.stages ?? []);
+          } catch {
+            // fall through
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+    };
+
+    return () => {
+      es.close();
+    };
+  }, [run.id, run.status]);
 
   const post = async () => {
     if (!draft.trim()) return;
@@ -56,10 +181,25 @@ function RunDetail() {
     }
   };
 
+  const rerun = async () => {
+    setBusy(true);
+    try {
+      const { slug } = await api.rerunRun(run.id);
+      toast.success("Re-run started");
+      await navigate({ to: "/runs/$runId", params: { runId: slug } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not re-run");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isLive = run.status === "running" || run.status === "pending";
+
   return (
     <AppShell
       title={run.title}
-      subtitle={`${run.agent} · ${run.model} · ${run.started} · ${run.duration}`}
+      subtitle={`${run.agent} · ${run.model || "pending"} · ${run.started} · ${run.duration}`}
       action={
         <div className="flex gap-2">
           <Button variant="secondary" asChild>
@@ -68,40 +208,79 @@ function RunDetail() {
             </Link>
           </Button>
           <Button
-            disabled
-            title="Available once the pipeline runtime ships"
-            onClick={() => {}}
+            disabled={busy || isLive}
+            onClick={rerun}
           >
-            Re-run with edits
+            <RefreshCw className="size-4" /> Re-run with edits
           </Button>
         </div>
       }
     >
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div className="space-y-6">
+          {/* Status + metrics */}
           <section className="panel hero-gradient p-5">
             <div className="flex items-center gap-3">
-              <Badge variant={run.status === "complete" ? "secondary" : "outline"}>
+              <Badge
+                variant={run.status === "complete" ? "secondary" : "outline"}
+                className={isLive ? "animate-pulse" : ""}
+              >
+                {isLive && <Loader2 className="mr-1 size-3 animate-spin" />}
                 {run.status}
               </Badge>
               <span className="text-xs text-muted-foreground">{run.id}</span>
             </div>
-            <p className="mt-3 max-w-3xl text-sm">{run.summary}</p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {run.metrics.map((m) => (
-                <div key={m.label} className="rounded-md border border-border bg-card/70 p-3">
-                  <p className="text-xs text-muted-foreground">{m.label}</p>
-                  <p className="mt-1 text-lg font-semibold">{m.value}</p>
-                  <p className="text-xs text-muted-foreground">{m.hint}</p>
-                </div>
-              ))}
-            </div>
+            <p className="mt-3 max-w-3xl text-sm">{run.summary || (isLive ? "Running…" : "")}</p>
+            {run.metrics.length > 0 && (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {run.metrics.map((m) => (
+                  <div key={m.label} className="rounded-md border border-border bg-card/70 p-3">
+                    <p className="text-xs text-muted-foreground">{m.label}</p>
+                    <p className="mt-1 text-lg font-semibold">{m.value}</p>
+                    <p className="text-xs text-muted-foreground">{m.hint}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
+          {/* Live stage progress */}
+          {stages.length > 0 && (
+            <section className="panel p-5">
+              <h2 className="font-semibold">Pipeline stages</h2>
+              <ul className="mt-4 space-y-3">
+                {stages.map((s) => (
+                  <li key={s.id} className="flex items-start gap-3">
+                    <div className="mt-0.5">{stageIcon(s.status)}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{s.name}</p>
+                        <span className="text-xs text-muted-foreground">
+                          {s.status === "complete" && s.model ? `${s.model}` : ""}
+                        </span>
+                      </div>
+                      {s.status === "complete" && (
+                        <p className="text-xs text-muted-foreground">
+                          {s.inputTokens + s.outputTokens} tokens · ${Number(s.costUsd).toFixed(4)}
+                        </p>
+                      )}
+                      {s.error && (
+                        <p className="mt-1 text-xs text-destructive">{s.error}</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Report sections */}
           {run.sections.map((section) => (
             <section key={section.heading} className="panel p-5">
               <h2 className="font-semibold">{section.heading}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{section.body}</p>
+              <div className="mt-2 prose-sm text-sm text-muted-foreground">
+                <Markdown source={section.body} />
+              </div>
               {section.bullets && (
                 <ul className="mt-3 space-y-2 text-sm">
                   {section.bullets.map((b) => (
@@ -121,17 +300,20 @@ function RunDetail() {
             </section>
           ))}
 
-          <section className="panel p-5">
-            <h2 className="font-semibold">Sources used</h2>
-            <ul className="mt-3 divide-y divide-border text-sm">
-              {run.sources.map((s) => (
-                <li key={s.name} className="flex items-center justify-between py-2.5">
-                  <span>{s.name}</span>
-                  <Badge variant="outline">{s.kind}</Badge>
-                </li>
-              ))}
-            </ul>
-          </section>
+          {/* Sources */}
+          {run.sources.length > 0 && (
+            <section className="panel p-5">
+              <h2 className="font-semibold">Sources used</h2>
+              <ul className="mt-3 divide-y divide-border text-sm">
+                {run.sources.map((s) => (
+                  <li key={s.name} className="flex items-center justify-between py-2.5">
+                    <span>{s.name}</span>
+                    <Badge variant="outline">{s.kind}</Badge>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
 
         <aside className="space-y-4">
@@ -152,7 +334,7 @@ function RunDetail() {
                     </p>
                     {c.anchor && (
                       <p className="mt-1 border-l-2 border-primary/60 pl-2 text-xs text-primary">
-                        on "{c.anchor}"
+                        on &quot;{c.anchor}&quot;
                       </p>
                     )}
                     <p className="mt-1 text-sm">{c.body}</p>

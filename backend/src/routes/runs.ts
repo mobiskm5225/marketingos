@@ -5,10 +5,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db } from '../core/db';
-import { runs, agents, runComments, runAttachments } from '../core/db/schema';
+import { runs, agents, runComments, runAttachments, runStages, runEvents } from '../core/db/schema';
 import { eq, desc, inArray, asc } from 'drizzle-orm';
 import { formatDuration, formatBytes, initialsFor } from '../lib/format';
 import { HttpError } from '../middleware/error';
+import { createAndExecuteRun } from '../core/agent/runner';
+import { onRunEvent } from '../core/agent/emitter';
 
 const router = Router();
 const upload = multer({
@@ -70,7 +72,9 @@ async function decorate(rows: { run: RunRow; agentName: string }[]) {
     status: run.status,
     started: run.startedAt.toISOString(),
     // A run still in flight has no duration to report yet.
-    duration: run.status === 'running' ? 'running…' : formatDuration(run.durationMs),
+    duration: run.status === 'running' || run.status === 'pending'
+      ? 'running…'
+      : formatDuration(run.durationMs),
     model: run.model ?? '',
     summary: run.summary,
     metrics: run.metrics,
@@ -109,7 +113,164 @@ router.get('/runs/:slug', async (req, res, next) => {
     }
 
     const [decorated] = await decorate(rows);
-    res.json(decorated);
+
+    // Also include stages and events for the detail view
+    const stages = await db
+      .select()
+      .from(runStages)
+      .where(eq(runStages.runId, rows[0]!.run.id))
+      .orderBy(asc(runStages.position));
+
+    const events = await db
+      .select()
+      .from(runEvents)
+      .where(eq(runEvents.runId, rows[0]!.run.id))
+      .orderBy(asc(runEvents.createdAt));
+
+    res.json({
+      ...decorated,
+      stages: stages.map((s) => ({
+        id: s.id,
+        name: s.name,
+        position: s.position,
+        status: s.status,
+        attempt: s.attempt,
+        model: s.model,
+        inputTokens: s.inputTokens,
+        outputTokens: s.outputTokens,
+        costUsd: s.costUsd,
+        output: s.output,
+        error: s.error,
+        startedAt: s.startedAt?.toISOString() ?? null,
+        finishedAt: s.finishedAt?.toISOString() ?? null,
+      })),
+      events: events.map((e) => ({
+        id: e.id,
+        type: e.type,
+        message: e.message,
+        time: e.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Execute ──────────────────────────────────────────────────────────────────
+
+const createRunSchema = z.object({
+  agentSlug: z.string().min(1),
+  title: z.string().optional(),
+  input: z.record(z.string(), z.unknown()).optional(),
+});
+
+router.post('/runs', async (req, res, next) => {
+  try {
+    const body = createRunSchema.parse(req.body);
+    const run = await createAndExecuteRun({
+      agentSlug: body.agentSlug,
+      title: body.title,
+      input: body.input,
+    });
+    res.status(201).json({ id: run.slug, slug: run.slug });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── SSE stream ───────────────────────────────────────────────────────────────
+
+router.get('/runs/:slug/events', async (req, res, next) => {
+  try {
+    const run = await findRun(String(req.params.slug));
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no', // nginx
+    });
+
+    // Send existing events as catch-up
+    const existingEvents = await db
+      .select()
+      .from(runEvents)
+      .where(eq(runEvents.runId, run.id))
+      .orderBy(asc(runEvents.createdAt));
+
+    for (const event of existingEvents) {
+      res.write(
+        `data: ${JSON.stringify({ type: event.type, message: event.message, time: event.createdAt.toISOString() })}\n\n`,
+      );
+    }
+
+    // If the run is already finished, close immediately
+    if (['complete', 'error', 'needs review'].includes(run.status)) {
+      res.write(`data: ${JSON.stringify({ type: 'stream_end', message: 'Run already finished' })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Subscribe to live events
+    const cleanup = onRunEvent(run.id, (event) => {
+      try {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+        if (event.type === 'run_complete' || event.type === 'run_error') {
+          res.write(`data: ${JSON.stringify({ type: 'stream_end' })}\n\n`);
+          res.end();
+        }
+      } catch {
+        // Client disconnected
+      }
+    });
+
+    // Keep-alive ping every 15s
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(': keep-alive\n\n');
+      } catch {
+        clearInterval(keepAlive);
+      }
+    }, 15_000);
+
+    req.on('close', () => {
+      cleanup();
+      clearInterval(keepAlive);
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Re-run ───────────────────────────────────────────────────────────────────
+
+const rerunSchema = z.object({
+  title: z.string().optional(),
+  input: z.record(z.string(), z.unknown()).optional(),
+});
+
+router.post('/runs/:slug/rerun', async (req, res, next) => {
+  try {
+    const original = await findRun(String(req.params.slug));
+    const body = rerunSchema.parse(req.body);
+
+    // Look up the agent slug
+    const [agent] = await db.select({ slug: agents.slug }).from(agents).where(eq(agents.id, original.agentId));
+    if (!agent) throw new HttpError(404, 'Agent no longer exists');
+
+    const mergedInput = {
+      ...((original.input ?? {}) as Record<string, unknown>),
+      ...(body.input ?? {}),
+    };
+
+    const run = await createAndExecuteRun({
+      agentSlug: agent.slug,
+      title: body.title ?? `Re-run: ${original.title}`,
+      input: mergedInput,
+      parentRunId: original.id,
+    });
+
+    res.status(201).json({ id: run.slug, slug: run.slug });
   } catch (err) {
     next(err);
   }

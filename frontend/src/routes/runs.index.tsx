@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Clock, Cpu, FileBarChart } from "lucide-react";
+import { Clock, Cpu, FileBarChart, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
@@ -26,6 +26,11 @@ export const Route = createFileRoute("/runs/")({
   component: RunsPage,
 });
 
+const statusVariant: Record<string, "secondary" | "outline" | "destructive"> = {
+  complete: "secondary",
+  error: "destructive",
+};
+
 function RunsPage() {
   const { runs } = Route.useLoaderData();
   return (
@@ -36,39 +41,51 @@ function RunsPage() {
             <FileBarChart className="size-6 text-primary" />
             <p className="font-medium">No results yet</p>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Every agent run lands here with its report, the sources it used and any review
-              comments. Run an agent to see the first one.
+              Head to the <strong>Agents</strong> page, pick an agent, and click{" "}
+              <strong>Run</strong> to start your first pipeline. The report, sources, and review
+              comments will appear here.
             </p>
           </div>
         )}
-        {runs.map((run) => (
-          <Link
-            key={run.id}
-            to="/runs/$runId"
-            params={{ runId: run.id }}
-            className="panel block p-5 transition-colors hover:border-primary/50"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{run.title}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{run.summary}</p>
+        {runs.map((run) => {
+          const isLive = run.status === "running" || run.status === "pending";
+          return (
+            <Link
+              key={run.id}
+              to="/runs/$runId"
+              params={{ runId: run.id }}
+              className="panel block p-5 transition-colors hover:border-primary/50"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">{run.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {run.summary || (isLive ? "Running…" : "")}
+                  </p>
+                </div>
+                <Badge
+                  variant={statusVariant[run.status] ?? "outline"}
+                  className={isLive ? "animate-pulse" : ""}
+                >
+                  {isLive && <Loader2 className="mr-1 size-3 animate-spin" />}
+                  {run.status}
+                </Badge>
               </div>
-              <Badge variant={run.status === "complete" ? "secondary" : "outline"}>
-                {run.status}
-              </Badge>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
-              <span>{run.agent}</span>
-              <span className="flex items-center gap-1">
-                <Cpu className="size-3" /> {run.model}
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="size-3" /> {run.started} · {run.duration}
-              </span>
-              <span>{run.comments.length} comments</span>
-            </div>
-          </Link>
-        ))}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span>{run.agent}</span>
+                {run.model && (
+                  <span className="flex items-center gap-1">
+                    <Cpu className="size-3" /> {run.model}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3" /> {run.started} · {run.duration}
+                </span>
+                <span>{run.comments.length} comments</span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </AppShell>
   );

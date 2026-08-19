@@ -1,6 +1,6 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Bot, Plus, Save, Trash2, TriangleAlert, X } from "lucide-react";
+import { Bot, Play, Plus, Save, Trash2, TriangleAlert, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { PipelineMap } from "@/components/PipelineMap";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +87,8 @@ function AgentsPage() {
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [runOpen, setRunOpen] = useState(false);
+  const navigate = useNavigate();
 
   const choices = modelChoices(modelProviders);
 
@@ -236,6 +238,12 @@ function AgentsPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button
+                      disabled={busy || detail.stages.length === 0 || !!detail.cycle}
+                      onClick={() => setRunOpen(true)}
+                    >
+                      <Play className="size-4" /> Run
+                    </Button>
+                    <Button
                       variant="secondary"
                       disabled={busy}
                       onClick={() =>
@@ -256,6 +264,17 @@ function AgentsPage() {
                   {detail.description}
                 </p>
               </section>
+
+              {/* Run dialog */}
+              <Dialog open={runOpen} onOpenChange={setRunOpen}>
+                <RunAgentDialog
+                  agent={detail}
+                  onStarted={async (slug) => {
+                    setRunOpen(false);
+                    await navigate({ to: "/runs/$runId", params: { runId: slug } });
+                  }}
+                />
+              </Dialog>
 
               <Tabs defaultValue="pipeline">
                 <TabsList>
@@ -868,6 +887,107 @@ function CreateAgentDialog({
       <DialogFooter>
         <Button onClick={create} disabled={busy}>
           {busy ? "Creating…" : "Create agent"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+// ─── Run agent dialog ─────────────────────────────────────────────────────────
+
+function RunAgentDialog({
+  agent,
+  onStarted,
+}: {
+  agent: AgentDetail;
+  onStarted: (slug: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(
+    `${agent.name} — ${new Date().toLocaleDateString()}`,
+  );
+  const [inputValues, setInputValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  const start = async () => {
+    setBusy(true);
+    try {
+      const input: Record<string, unknown> = {};
+      for (const inp of agent.inputs) {
+        const val = inputValues[inp.key];
+        if (inp.required && (!val || !val.trim())) {
+          toast.error(`"${inp.label}" is required.`);
+          setBusy(false);
+          return;
+        }
+        if (val) input[inp.key] = val;
+      }
+
+      const { slug } = await api.startRun(agent.id, title, input);
+      toast.success("Run started");
+      await onStarted(slug);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start the run");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Run {agent.name}</DialogTitle>
+        <DialogDescription>
+          {agent.stages.length} stages · {agent.defaultModel ?? "default model"}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="run-title">Run title</Label>
+          <Input
+            id="run-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+        {agent.inputs.map((inp) => (
+          <div key={inp.key} className="space-y-2">
+            <Label htmlFor={`input-${inp.key}`}>
+              {inp.label}
+              {inp.required && <span className="text-destructive"> *</span>}
+            </Label>
+            {inp.type === "textarea" ? (
+              <Textarea
+                id={`input-${inp.key}`}
+                placeholder={inp.placeholder ?? ""}
+                value={inputValues[inp.key] ?? ""}
+                onChange={(e) =>
+                  setInputValues((prev) => ({ ...prev, [inp.key]: e.target.value }))
+                }
+              />
+            ) : (
+              <Input
+                id={`input-${inp.key}`}
+                type={inp.type === "url" ? "url" : "text"}
+                placeholder={inp.placeholder ?? ""}
+                value={inputValues[inp.key] ?? ""}
+                onChange={(e) =>
+                  setInputValues((prev) => ({ ...prev, [inp.key]: e.target.value }))
+                }
+              />
+            )}
+          </div>
+        ))}
+        {agent.inputs.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            This agent has no configured inputs — it will run using its pipeline and
+            knowledge bases.
+          </p>
+        )}
+      </div>
+      <DialogFooter>
+        <Button onClick={start} disabled={busy}>
+          <Play className="size-4" />
+          {busy ? "Starting…" : "Start run"}
         </Button>
       </DialogFooter>
     </DialogContent>

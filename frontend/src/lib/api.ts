@@ -116,11 +116,34 @@ export interface Comment {
   anchor?: string;
 }
 
+export interface RunStage {
+  id: string;
+  name: string;
+  position: number;
+  status: "pending" | "running" | "complete" | "failed" | "error";
+  attempt: number;
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: string;
+  output: unknown;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface RunEventItem {
+  id: string;
+  type: string;
+  message: string;
+  time: string;
+}
+
 export interface Run {
   id: string;
   title: string;
   agent: string;
-  status: "complete" | "running" | "needs review";
+  status: "pending" | "complete" | "running" | "needs review" | "error";
   started: string;
   duration: string;
   model: string;
@@ -130,6 +153,8 @@ export interface Run {
   sources: Source[];
   attachments: Attachment[];
   comments: Comment[];
+  stages?: RunStage[];
+  events?: RunEventItem[];
 }
 
 export interface Activity {
@@ -433,6 +458,16 @@ export const api = {
   syncAll: () => send<{ synced: number; message?: string }>("POST", "/knowledge-bases/sync"),
 
   // ─── Runs ───────────────────────────────────────────────────────────────────
+
+  startRun: (agentSlug: string, title?: string, input?: Record<string, unknown>) =>
+    send<{ id: string; slug: string }>("POST", "/runs", { agentSlug, title, input }),
+
+  rerunRun: (slug: string, title?: string, input?: Record<string, unknown>) =>
+    send<{ id: string; slug: string }>("POST", `/runs/${slug}/rerun`, { title, input }),
+
+  streamRunEvents: (slug: string): EventSource => {
+    return new EventSource(`${API_BASE}/runs/${slug}/events`);
+  },
 
   addComment: (slug: string, body: string, anchor?: string | null) =>
     send<Comment>("POST", `/runs/${slug}/comments`, { body, anchor: anchor ?? null }),

@@ -28,3 +28,11 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/vaults/
+
+# Binaries
+*.exe
+*.exe.old
+
+# Frontend build output (should not be committed)
+frontend/.output/
+frontend/.wrangler/

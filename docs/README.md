@@ -17,56 +17,56 @@ coming back — those become agents a user creates, not modules a developer writ
 | [setup.md](./setup.md) | **Start here.** Prerequisites, env vars, running locally and in Docker, troubleshooting |
 | [architecture.md](./architecture.md) | Stack, directory layout, database schema, agent runtime, knowledge pipeline, build phases |
 | [api.md](./api.md) | Every HTTP endpoint — what exists today and what each phase adds |
+| [tracker.md](./tracker.md) | **Build tracker** — every table, endpoint and feature, built vs not built |
 | [frontend.md](./frontend.md) | Design system, routes, component structure, the data contract the backend must satisfy |
 
-Four files, plus this index. Anything not here was describing the deleted backend and has been removed.
+Five files, plus this index. Anything not here was describing the deleted backend and has been removed.
 
 ---
 
 ## Current status
 
-The frontend is complete and fresh. The backend is being rebuilt underneath it to match.
+Backend rebuilt and wired to the frontend. Everything below is verified against the running stack,
+not aspirational.
 
 | Area | State |
 |---|---|
-| Frontend UI | Built — all 5 pages, every layout and component |
-| Frontend mutations | **Stubbed.** Every button calls `toast.success(...)` and mutates React state only |
-| Backend reads | 7 GET endpoints, serving real data from Postgres |
-| Backend writes | **None yet** |
-| Agent execution | **Not built yet** |
-| Knowledge ingestion / retrieval | **Not built yet** |
+| Frontend UI | 7 pages, all rendering real data |
+| Frontend mutations | Wired — every control calls the API. The three that cannot work yet are **disabled with a reason**, never faked |
+| Backend | 48 endpoints across 9 routers |
+| Skills library | CRUD + import from folder, zip and GitHub |
+| Agent builder | Pipeline map, per-stage model routing, categories, cycle detection |
+| Knowledge ingestion | PDF/DOCX/XLSX/CSV/MD parsed, chunked, embedded, indexed |
+| Knowledge retrieval | pgvector similarity, with full-text fallback when no embedding key is set |
+| Integrations | Notion, Obsidian, Google Drive connect + sync. Microsoft Office blocked on OAuth |
+| Model providers | Keys encrypted at rest, endpoint probe, per-stage routing. Ollama verified end to end |
+| **Agent execution** | **Not built — this is the remaining gap** |
 | Auth | **None.** Deliberate for now — see the warning below |
 
-Build order and the full plan live in [architecture.md](./architecture.md#build-phases).
+### Phases
 
----
+| Phase | Scope | State |
+|---|---|---|
+| 0 | Repo unbroken, Docker cold start | done |
+| 1 | Schema — 21 tables, categories, pgvector | done |
+| 2 | Skills library + 3 import paths | done |
+| 3 | Agent builder, pipeline map, per-layer model routing, categories | done |
+| 4 | Knowledge: ingest, retrieval, memory layers, 3 connectors | done |
+| 5 | **Pipeline runtime — execute a DAG, record every stage** | **next** |
+| 6 | Remaining frontend polish, run streaming | pending |
+| 7 | Docs refresh | pending |
 
-## Quick reference
+### What Phase 5 unblocks
 
-```bash
-# Postgres (pgvector image, published on host port 5433)
-docker compose up -d postgres
+Three controls are disabled today purely because nothing can execute a pipeline yet:
 
-# Backend
-cd backend && npm run db:migrate && npm run seed && npm run dev
+- **Re-run with edits** on a run report
+- Running an agent at all — there is no "Run" button, because there is no runtime
+- Real `runs` rows; the run list is populated only by manual inserts
 
-# Frontend (separate terminal)
-cd frontend && npm run dev
-```
-
-| URL | Service |
-|---|---|
-| `http://localhost:8081` | Frontend (Vite picks the next free port from 8080) |
-| `http://localhost:8000` | Backend API |
-| `localhost:5433` | PostgreSQL (container) |
-
-```bash
-curl http://localhost:8000/health          # {"status":"ok"}
-curl http://localhost:8000/api/agents      # seeded demo agents
-```
-
-**Stack:** Node 22 · Express 5 · TypeScript · PostgreSQL 16 + pgvector · Drizzle ORM · React 19 ·
-TanStack Start · Tailwind CSS v4 · shadcn/ui
+Phase 5 builds `core/agent/runner.ts`: resolve levels via `dag.ts`, execute each level
+concurrently, resolve each stage's model (stage override, else agent default), retrieve grounding
+via `knowledge/retrieve.ts`, record `run_stages` rows with tokens and cost, and honour gates.
 
 ---
 
