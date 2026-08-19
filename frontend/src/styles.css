@@ -162,6 +162,15 @@
   box-shadow: var(--shadow-panel);
 }
 
+/* Scrolls, but without the scrollbar chrome. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility grid-bg {
   background-image: var(--surface-grid);
   background-size: 32px 32px;

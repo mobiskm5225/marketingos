@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { cn } from "@/lib/utils";
 import {
   Bot,
   Brain,
@@ -23,16 +24,23 @@ export function AppShell({
   title,
   subtitle,
   action,
+  fullHeight = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  /**
+   * Pins the header and hands the content area exactly the remaining height on
+   * desktop, so a page can own its own scrolling instead of guessing how tall
+   * the header is. Below `lg` the page scrolls normally.
+   */
+  fullHeight?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <div className="flex min-h-screen w-full">
+    <div className={cn("min-h-screen", fullHeight && "lg:h-svh lg:overflow-hidden")}>
+      <div className={cn("flex min-h-screen w-full", fullHeight && "lg:h-svh lg:min-h-0")}>
         {/* ── Desktop sidebar ── */}
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar px-4 py-6 md:flex">
           <Link to="/" className="mb-8 flex items-center gap-2 px-2">
@@ -65,8 +73,18 @@ export function AppShell({
         </aside>
 
         {/* ── Main content ── */}
-        <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur">
+        <main
+          className={cn(
+            "min-w-0 flex-1",
+            fullHeight && "lg:flex lg:h-svh lg:min-h-0 lg:flex-col",
+          )}
+        >
+          <header
+            className={cn(
+              "sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur",
+              fullHeight && "lg:static lg:shrink-0",
+            )}
+          >
             {/* Title row */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
               <div className="min-w-0">
@@ -102,7 +120,14 @@ export function AppShell({
             </div>
           </header>
 
-          <div className="px-4 py-4 sm:px-6 sm:py-6">{children}</div>
+          <div
+            className={cn(
+              "px-4 py-4 sm:px-6 sm:py-6",
+              fullHeight && "lg:min-h-0 lg:flex-1 lg:overflow-hidden",
+            )}
+          >
+            {children}
+          </div>
         </main>
       </div>
     </div>

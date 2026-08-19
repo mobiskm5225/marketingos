@@ -166,6 +166,7 @@ function SkillsPage() {
   return (
     <AppShell
       title="Skills"
+      fullHeight
       subtitle="The reusable units agents are built from. Each one is a markdown document with its own contract."
       action={
         <div className="flex gap-2">
@@ -188,8 +189,8 @@ function SkillsPage() {
         </div>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[340px_1fr]">
-        <div className="space-y-3 lg:sticky lg:top-[104px] lg:h-[calc(100vh-128px)] lg:overflow-y-auto lg:pr-2">
+      <div className="grid items-start gap-6 lg:h-full lg:grid-cols-[340px_1fr] lg:items-stretch">
+        <div className="no-scrollbar space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -252,8 +253,8 @@ function SkillsPage() {
         </div>
 
         {editing ? (
-          <div className="space-y-4 lg:sticky lg:top-[104px] lg:h-[calc(100vh-128px)] lg:overflow-y-auto lg:pl-1 lg:pr-2">
-            <div className="panel flex flex-wrap items-start justify-between gap-3 p-4">
+          <div className="space-y-4 lg:flex lg:min-h-0 lg:flex-col lg:space-y-0 lg:gap-4 lg:pl-1">
+            <div className="panel flex flex-wrap items-start justify-between gap-3 p-4 lg:shrink-0">
               <div className="min-w-0">
                 <p className="font-medium">{selected || "New skill"}</p>
                 <p className="text-xs text-muted-foreground">
@@ -286,8 +287,10 @@ function SkillsPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="panel p-4">
+            {/* Editor and preview each scroll on their own; the pair fills the
+                remaining height rather than stacking a second scrollbar. */}
+            <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-2">
+              <div className="panel flex min-h-0 flex-col p-4">
                 <Label className="text-xs uppercase tracking-widest text-muted-foreground">
                   Markdown
                 </Label>
@@ -295,21 +298,21 @@ function SkillsPage() {
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   spellCheck={false}
-                  className="mt-2 min-h-[520px] font-mono text-xs leading-relaxed"
+                  className="no-scrollbar mt-2 min-h-[420px] flex-1 resize-none font-mono text-xs leading-relaxed lg:min-h-0"
                 />
               </div>
-              <div className="panel p-4">
+              <div className="panel flex min-h-0 flex-col p-4">
                 <Label className="text-xs uppercase tracking-widest text-muted-foreground">
                   Preview
                 </Label>
-                <div className="mt-2 max-h-[520px] overflow-y-auto pr-1">
+                <div className="no-scrollbar mt-2 max-h-[420px] min-h-0 flex-1 overflow-y-auto pr-1 lg:max-h-none">
                   <Markdown source={body} />
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="panel flex flex-col items-center justify-center gap-2 border-dashed p-12 text-center lg:sticky lg:top-[104px]">
+          <div className="panel flex flex-col items-center justify-center gap-2 border-dashed p-12 text-center lg:h-full">
             <Blocks className="size-6 text-primary" />
             <p className="font-medium">Pick a skill to edit</p>
             <p className="max-w-sm text-sm text-muted-foreground">
@@ -494,7 +497,7 @@ function PreviewPane({
         </div>
       ))}
 
-      <div className="panel max-h-[320px] overflow-y-auto p-4">
+      <div className="panel no-scrollbar max-h-[320px] overflow-y-auto p-4">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
           Proposed pipeline
         </p>
