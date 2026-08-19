@@ -108,12 +108,14 @@ function KnowledgePage() {
       }
     >
       <Tabs defaultValue="bases">
-        <TabsList>
-          <TabsTrigger value="bases">Bases</TabsTrigger>
-          <TabsTrigger value="integrations">Integrations</TabsTrigger>
-          <TabsTrigger value="memory">Memory builder</TabsTrigger>
-          <TabsTrigger value="files">Files</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="mb-0">
+            <TabsTrigger value="bases">Bases</TabsTrigger>
+            <TabsTrigger value="integrations">Integrations</TabsTrigger>
+            <TabsTrigger value="memory">Memory builder</TabsTrigger>
+            <TabsTrigger value="files">Files</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="bases" className="mt-6">
           <div className="grid gap-4 md:grid-cols-2">

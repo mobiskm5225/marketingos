@@ -33,6 +33,7 @@ export function AppShell({
   return (
     <div className="min-h-screen">
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px]">
+        {/* ── Desktop sidebar ── */}
         <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 md:flex">
           <Link to="/" className="mb-8 flex items-center gap-2 px-2">
             <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -63,32 +64,45 @@ export function AppShell({
           </div>
         </aside>
 
+        {/* ── Main content ── */}
         <main className="min-w-0 flex-1">
           <header className="sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5">
-              <div>
-                <h1 className="text-xl font-semibold">{title}</h1>
+            {/* Title row */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-semibold">{title}</h1>
                 {subtitle && (
-                  <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+                  <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground sm:mt-1 sm:line-clamp-1">
+                    {subtitle}
+                  </p>
                 )}
               </div>
-              {action}
+              {action && (
+                <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
+              )}
             </div>
-            <div className="flex gap-1 overflow-x-auto px-4 pb-3 md:hidden">
+
+            {/* Mobile nav strip (icons + labels) */}
+            <div className="flex gap-0.5 overflow-x-auto px-3 pb-2 md:hidden">
               {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
-                  className="whitespace-nowrap rounded-md px-3 py-1.5 text-xs text-muted-foreground"
-                  activeProps={{ className: "bg-secondary text-foreground" }}
+                  className="flex shrink-0 flex-col items-center gap-0.5 rounded-md px-3 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  activeProps={{
+                    className:
+                      "flex shrink-0 flex-col items-center gap-0.5 rounded-md px-3 py-1.5 text-[10px] bg-secondary text-foreground font-medium transition-colors",
+                  }}
                 >
+                  <item.icon className="size-3.5" />
                   {item.label}
                 </Link>
               ))}
             </div>
           </header>
-          <div className="px-6 py-6">{children}</div>
+
+          <div className="px-4 py-4 sm:px-6 sm:py-6">{children}</div>
         </main>
       </div>
     </div>

@@ -253,17 +253,17 @@ function SkillsPage() {
 
         {editing ? (
           <div className="space-y-4">
-            <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
-              <div>
+            <div className="panel flex flex-wrap items-start justify-between gap-3 p-4">
+              <div className="min-w-0">
                 <p className="font-medium">{selected || "New skill"}</p>
                 <p className="text-xs text-muted-foreground">
-                  The frontmatter <code className="font-mono">name</code> becomes the skill’s
+                  The frontmatter <code className="font-mono">name</code> becomes the skill's
                   identity.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Select value={category || "__none__"} onValueChange={(v) => setCategory(v === "__none__" ? "" : v)}>
-                  <SelectTrigger className="w-44">
+                  <SelectTrigger className="w-40 sm:w-44">
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -286,7 +286,7 @@ function SkillsPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div className="panel p-4">
                 <Label className="text-xs uppercase tracking-widest text-muted-foreground">
                   Markdown

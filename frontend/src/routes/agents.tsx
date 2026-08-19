@@ -205,7 +205,7 @@ function AgentsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+        <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
           <div className="space-y-3">
             {agents.map((agent) => (
               <button
@@ -236,7 +236,7 @@ function AgentsPage() {
                     <h2 className="text-lg font-semibold">{detail.name}</h2>
                     <p className="text-sm text-muted-foreground">{detail.role}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       disabled={busy || detail.stages.length === 0 || !!detail.cycle}
                       onClick={() => setRunOpen(true)}

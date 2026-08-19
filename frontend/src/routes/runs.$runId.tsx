@@ -201,7 +201,7 @@ function RunDetail() {
       title={run.title}
       subtitle={`${run.agent} · ${run.model || "pending"} · ${run.started} · ${run.duration}`}
       action={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" asChild>
             <Link to="/runs">
               <ArrowLeft className="size-4" /> All results
@@ -211,12 +211,12 @@ function RunDetail() {
             disabled={busy || isLive}
             onClick={rerun}
           >
-            <RefreshCw className="size-4" /> Re-run with edits
+            <RefreshCw className="size-4" /> Re-run
           </Button>
         </div>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
           {/* Status + metrics */}
           <section className="panel hero-gradient p-5">
