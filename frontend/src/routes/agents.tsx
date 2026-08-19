@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   api,
@@ -88,6 +89,41 @@ function AgentsPage() {
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
+
+  // Fullscreen covers the whole workspace — tabs, canvas, model picker, stage
+  // panel — because a pipeline you cannot edit is not worth expanding.
+  const [agentTab, setAgentTab] = useState("pipeline");
+  const [workspaceFullscreen, setWorkspaceFullscreen] = useState(false);
+
+  // The browser goes fullscreen on <html>, not on the workspace element, and the
+  // workspace becomes a fixed overlay inside it. Fullscreening the element
+  // itself would leave every Radix portal (skill picker, model picker, dialogs)
+  // outside the fullscreen subtree, i.e. invisible.
+  useEffect(() => {
+    const sync = () => setWorkspaceFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  // Escape leaves the overlay even when the fullscreen request was refused.
+  useEffect(() => {
+    if (!workspaceFullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.fullscreenElement) setWorkspaceFullscreen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [workspaceFullscreen]);
+
+  const toggleWorkspaceFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+      setWorkspaceFullscreen(false);
+      return;
+    }
+    setWorkspaceFullscreen(true);
+    void document.documentElement.requestFullscreen().catch(() => undefined);
+  };
   const navigate = useNavigate();
 
   const choices = modelChoices(modelProviders);
@@ -276,17 +312,47 @@ function AgentsPage() {
                 />
               </Dialog>
 
-              <Tabs defaultValue="pipeline">
-                <TabsList className="grid w-full grid-cols-4">
+              <div
+                className={cn(
+                  "min-w-0",
+                  workspaceFullscreen && "fixed inset-0 z-50 bg-background",
+                )}
+              >
+              <Tabs
+                value={agentTab}
+                onValueChange={setAgentTab}
+                className={cn(workspaceFullscreen && "h-full")}
+              >
+                {/* Fullscreen has no page around it, so the tab strip detaches
+                    and floats over the canvas instead of sitting above it. */}
+                <TabsList
+                  className={cn(
+                    "grid w-full shrink-0 grid-cols-4",
+                    workspaceFullscreen &&
+                      "absolute left-1/2 top-4 z-10 w-auto -translate-x-1/2 border border-border bg-card shadow-lg",
+                  )}
+                >
                   <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
                   <TabsTrigger value="settings">Settings</TabsTrigger>
                   <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
                   <TabsTrigger value="references">References</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="pipeline" className="mt-4 space-y-4">
+                <div
+                  className={cn(
+                    "mt-4 space-y-4",
+                    workspaceFullscreen && "absolute inset-0 mt-0 space-y-0",
+                    !workspaceFullscreen && agentTab !== "pipeline" && "hidden",
+                  )}
+                >
                   {detail.cycle && (
-                    <div className="flex gap-2 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-xs">
+                    <div
+                      className={cn(
+                        "flex gap-2 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-xs",
+                        workspaceFullscreen &&
+                          "absolute left-4 top-20 z-10 max-w-md bg-destructive/20 shadow-lg",
+                      )}
+                    >
                       <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" />
                       <span>
                         These stages depend on each other in a loop and cannot run. Fix their
@@ -301,9 +367,18 @@ function AgentsPage() {
                     selectedId={selectedStageId}
                     defaultModel={detail.defaultModel}
                     onSelect={setSelectedStageId}
+                    isFullscreen={workspaceFullscreen}
+                    onToggleFullscreen={toggleWorkspaceFullscreen}
                   />
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  {/* Stage controls ride on the canvas in fullscreen. */}
+                  <div
+                    className={cn(
+                      "flex flex-wrap items-center gap-2",
+                      workspaceFullscreen &&
+                        "absolute right-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-lg border border-border bg-card p-2 shadow-lg",
+                    )}
+                  >
                     <AddStage
                       skills={skills}
                       choices={choices}
@@ -331,12 +406,23 @@ function AgentsPage() {
                         void saveStages(next);
                       }}
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p
+                      className={cn(
+                        "text-xs text-muted-foreground",
+                        workspaceFullscreen && "hidden",
+                      )}
+                    >
                       Stages in the same column run in parallel.
                     </p>
                   </div>
 
-                  {stage && (
+                  {stage && (!workspaceFullscreen || agentTab === "pipeline") && (
+                    <div
+                      className={cn(
+                        workspaceFullscreen &&
+                          "no-scrollbar absolute bottom-4 right-4 top-20 z-10 w-[360px] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-border bg-card shadow-xl",
+                      )}
+                    >
                     <StagePanel
                       stage={stage}
                       allStages={detail.stages}
@@ -353,10 +439,18 @@ function AgentsPage() {
                         void saveStages(detail.stages.filter((s) => s.id !== stage.id))
                       }
                     />
+                    </div>
                   )}
-                </TabsContent>
+                </div>
 
-                <TabsContent value="settings" className="mt-4">
+                <TabsContent
+                  value="settings"
+                  className={cn(
+                    "mt-4",
+                    workspaceFullscreen &&
+                      "no-scrollbar absolute bottom-4 right-4 top-20 z-10 mt-0 w-[420px] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xl",
+                  )}
+                >
                   <SettingsTab
                     detail={detail}
                     choices={choices}
@@ -366,7 +460,14 @@ function AgentsPage() {
                   />
                 </TabsContent>
 
-                <TabsContent value="knowledge" className="mt-4">
+                <TabsContent
+                  value="knowledge"
+                  className={cn(
+                    "mt-4",
+                    workspaceFullscreen &&
+                      "no-scrollbar absolute bottom-4 right-4 top-20 z-10 mt-0 w-[420px] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xl",
+                  )}
+                >
                   <section className="panel p-5">
                     <h3 className="font-semibold">Knowledge access</h3>
                     <p className="text-sm text-muted-foreground">
@@ -414,7 +515,14 @@ function AgentsPage() {
                   </section>
                 </TabsContent>
 
-                <TabsContent value="references" className="mt-4">
+                <TabsContent
+                  value="references"
+                  className={cn(
+                    "mt-4",
+                    workspaceFullscreen &&
+                      "no-scrollbar absolute bottom-4 right-4 top-20 z-10 mt-0 w-[420px] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xl",
+                  )}
+                >
                   <section className="panel p-5">
                     <h3 className="font-semibold">References</h3>
                     <p className="text-sm text-muted-foreground">
@@ -438,6 +546,7 @@ function AgentsPage() {
                   </section>
                 </TabsContent>
               </Tabs>
+              </div>
             </div>
           ) : (
             <div className="panel flex flex-col items-center justify-center gap-2 border-dashed p-12 text-center lg:sticky lg:top-[104px]">

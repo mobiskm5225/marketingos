@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Maximize, Minimize } from "lucide-react";
 import {
   Background,
@@ -27,32 +27,22 @@ export function PipelineMap({
   selectedId,
   defaultModel,
   onSelect,
+  isFullscreen = false,
+  onToggleFullscreen,
 }: {
   stages: AgentStage[];
   levels: string[][];
   selectedId: string | null;
   defaultModel: string | null;
   onSelect: (id: string) => void;
+  /**
+   * Fullscreen is owned by the caller so the whole pipeline workspace — tabs,
+   * the model picker, the stage panel — goes fullscreen with the canvas rather
+   * than the canvas alone. The map only grows to fill whatever it is given.
+   */
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch(err => console.error("Error attempting to enable fullscreen:", err));
-    } else {
-      document.exitFullscreen().catch(err => console.error("Error attempting to exit fullscreen:", err));
-    }
-  };
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, []);
-
   const { nodes, edges } = useMemo(() => {
     const byId = new Map(stages.map((s) => [s.id, s]));
     const columnWidth = 240;
@@ -98,7 +88,7 @@ export function PipelineMap({
 
   if (stages.length === 0) {
     return (
-      <div className="flex h-[420px] items-center justify-center rounded-md border border-dashed border-border text-center">
+      <div className="flex h-[420px] min-h-0 items-center justify-center rounded-md border border-dashed border-border text-center">
         <div className="max-w-xs">
           <p className="text-sm font-medium">No stages yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -110,24 +100,37 @@ export function PipelineMap({
   }
 
   return (
-    <div ref={containerRef} className={isFullscreen ? "fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col bg-background" : "h-[420px] rounded-md border border-border"}>
+    <div
+      className={
+        isFullscreen
+          ? "absolute inset-0"
+          : "h-[420px] rounded-md border border-border"
+      }
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelect(node.id)}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={fitViewOptions}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
+        nodesFocusable={false}
+        edgesFocusable={false}
+        elevateNodesOnSelect={false}
         colorMode="dark"
       >
         <Background gap={16} size={1} />
-        <Controls showInteractive={false}>
-          <ControlButton onClick={toggleFullscreen} title="Toggle Fullscreen">
-            {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
-          </ControlButton>
+        {/* Fullscreen parks the stage controls bottom-left, so zoom moves out
+            of their way. */}
+        <Controls showInteractive={false} position={isFullscreen ? "top-left" : "bottom-left"}>
+          {onToggleFullscreen && (
+            <ControlButton onClick={onToggleFullscreen} title="Toggle fullscreen">
+              {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
+            </ControlButton>
+          )}
         </Controls>
       </ReactFlow>
     </div>
@@ -146,7 +149,7 @@ function StageNode({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div
-      className={`w-[196px] rounded-md border bg-card px-3 py-2 text-left shadow-sm transition-colors ${
+      className={`w-[196px] cursor-pointer rounded-md border bg-card px-3 py-2 text-left shadow-sm transition-[border-color,box-shadow] duration-150 ${
         selected ? "border-primary" : stage.isGate ? "border-accent/60" : "border-border"
       }`}
     >
@@ -174,4 +177,5 @@ function StageNode({ data }: { data: Record<string, unknown> }) {
   );
 }
 
-const nodeTypes = { stage: StageNode };
+const nodeTypes = { stage: memo(StageNode) };
+const fitViewOptions = { padding: 0.2 };
