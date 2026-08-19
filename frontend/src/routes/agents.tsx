@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Bot, Play, Plus, Save, Trash2, TriangleAlert, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { PipelineMap } from "@/components/PipelineMap";
@@ -312,6 +313,7 @@ function AgentsPage() {
                 />
               </Dialog>
 
+              <FullscreenLayer active={workspaceFullscreen}>
               <div
                 className={cn(
                   "min-w-0",
@@ -547,6 +549,7 @@ function AgentsPage() {
                 </TabsContent>
               </Tabs>
               </div>
+              </FullscreenLayer>
             </div>
           ) : (
             <div className="panel flex flex-col items-center justify-center gap-2 border-dashed p-12 text-center lg:sticky lg:top-[104px]">
@@ -1127,4 +1130,27 @@ function RunAgentDialog({
       </DialogFooter>
     </DialogContent>
   );
+}
+
+
+/**
+ * Renders its children into document.body while fullscreen.
+ *
+ * The workspace overlay is `position: fixed`, and any ancestor with a
+ * transform, filter, or containment turns that into "fixed inside the
+ * ancestor" — which is how the canvas ended up painted across the page
+ * instead of over it. Portalling to the body removes the question.
+ */
+function FullscreenLayer({ active, children }: { active: boolean; children: ReactNode }) {
+  useEffect(() => {
+    if (!active || typeof document === "undefined") return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [active]);
+
+  if (!active || typeof document === "undefined") return <>{children}</>;
+  return createPortal(children, document.body);
 }
