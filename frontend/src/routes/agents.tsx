@@ -205,8 +205,8 @@ function AgentsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-          <div className="space-y-3">
+        <div className="grid items-start gap-6 lg:grid-cols-[260px_1fr]">
+          <div className="space-y-3 lg:sticky lg:top-[104px] lg:h-[calc(100vh-128px)] lg:overflow-y-auto lg:pr-2">
             {agents.map((agent) => (
               <button
                 key={agent.id}
@@ -229,7 +229,7 @@ function AgentsPage() {
           </div>
 
           {detail ? (
-            <div className="space-y-4">
+            <div className="space-y-4 lg:sticky lg:top-[104px] lg:h-[calc(100vh-128px)] lg:overflow-y-auto lg:pl-1 lg:pr-2">
               <section className="panel p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -440,7 +440,7 @@ function AgentsPage() {
               </Tabs>
             </div>
           ) : (
-            <div className="panel flex items-center justify-center border-dashed p-12">
+            <div className="panel flex flex-col items-center justify-center gap-2 border-dashed p-12 text-center lg:sticky lg:top-[104px]">
               <p className="text-sm text-muted-foreground">Select an agent.</p>
             </div>
           )}
