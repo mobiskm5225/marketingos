@@ -32,7 +32,7 @@ export function AppShell({
 }) {
   return (
     <div className="min-h-screen">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1400px]">
+      <div className="flex min-h-screen w-full">
         {/* ── Desktop sidebar ── */}
         <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 md:flex">
           <Link to="/" className="mb-8 flex items-center gap-2 px-2">
