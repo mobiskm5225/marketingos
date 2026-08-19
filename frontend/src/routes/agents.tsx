@@ -277,7 +277,7 @@ function AgentsPage() {
               </Dialog>
 
               <Tabs defaultValue="pipeline">
-                <TabsList>
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
                   <TabsTrigger value="settings">Settings</TabsTrigger>
                   <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
@@ -306,10 +306,12 @@ function AgentsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <AddStage
                       skills={skills}
+                      choices={choices}
+                      defaultModel={detail.defaultModel}
                       agentCategory={detail.category}
                       used={detail.stages.map((s) => s.skill)}
                       disabled={busy}
-                      onAdd={(skillSlug) => {
+                      onAdd={(skillSlug, provider, model) => {
                         const last = detail.stages[detail.stages.length - 1];
                         const next: AgentStage[] = [
                           ...detail.stages,
@@ -321,8 +323,8 @@ function AgentsPage() {
                             position: (last?.position ?? 0) + 1,
                             dependsOn: last ? [last.id] : [],
                             isGate: false,
-                            provider: null,
-                            model: null,
+                            provider,
+                            model,
                             hasOverride: false,
                           },
                         ];
@@ -711,18 +713,23 @@ function SettingsTab({
  */
 function AddStage({
   skills,
+  choices,
+  defaultModel,
   agentCategory,
   used,
   disabled,
   onAdd,
 }: {
   skills: SkillSummary[];
+  choices: { provider: string; model: string; kind: string }[];
+  defaultModel: string | null;
   agentCategory: string | null;
   used: string[];
   disabled: boolean;
-  onAdd: (slug: string) => void;
+  onAdd: (slug: string, provider: string | null, model: string | null) => void;
 }) {
   const [value, setValue] = useState("");
+  const [modelValue, setModelValue] = useState("__inherit__");
   const available = skills.filter((s) => !used.includes(s.id));
   const suggested = agentCategory ? available.filter((s) => s.category === agentCategory) : [];
   const rest = available.filter((s) => !suggested.includes(s));
@@ -765,12 +772,31 @@ function AddStage({
           ))}
         </SelectContent>
       </Select>
+      <Select value={modelValue} onValueChange={setModelValue}>
+        <SelectTrigger className="w-48">
+          <SelectValue placeholder="Model (inherit)" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__inherit__">Inherit — {defaultModel ?? "no default"}</SelectItem>
+          {choices.map((c) => (
+            <SelectItem key={`${c.provider}::${c.model}`} value={`${c.provider}::${c.model}`}>
+              {c.model} · {c.provider}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Button
         variant="secondary"
         disabled={disabled || !value}
         onClick={() => {
-          onAdd(value);
+          if (modelValue === "__inherit__") {
+            onAdd(value, null, null);
+          } else {
+            const [provider, model] = modelValue.split("::");
+            onAdd(value, provider!, model!);
+          }
           setValue("");
+          setModelValue("__inherit__");
         }}
       >
         <Plus className="size-4" /> Add stage

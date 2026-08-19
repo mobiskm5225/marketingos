@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Maximize, Minimize } from "lucide-react";
 import {
   Background,
   Controls,
+  ControlButton,
   ReactFlow,
   type Edge,
   type Node,
@@ -32,6 +34,25 @@ export function PipelineMap({
   defaultModel: string | null;
   onSelect: (id: string) => void;
 }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch(err => console.error("Error attempting to enable fullscreen:", err));
+    } else {
+      document.exitFullscreen().catch(err => console.error("Error attempting to exit fullscreen:", err));
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
   const { nodes, edges } = useMemo(() => {
     const byId = new Map(stages.map((s) => [s.id, s]));
     const columnWidth = 240;
@@ -89,7 +110,7 @@ export function PipelineMap({
   }
 
   return (
-    <div className="h-[420px] rounded-md border border-border">
+    <div ref={containerRef} className={isFullscreen ? "fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col bg-background" : "h-[420px] rounded-md border border-border"}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -103,7 +124,11 @@ export function PipelineMap({
         colorMode="dark"
       >
         <Background gap={16} size={1} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false}>
+          <ControlButton onClick={toggleFullscreen} title="Toggle Fullscreen">
+            {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
+          </ControlButton>
+        </Controls>
       </ReactFlow>
     </div>
   );
