@@ -5,7 +5,7 @@ Base URL: `http://localhost:8000`
 All bodies are JSON. Responses are `application/json`.
 
 **No authentication.** Every endpoint is open. This is deliberate for now, and the reason the backend
-port is bound to `127.0.0.1` in `docker-compose.yml`. See
+port is bound to `127.0.0.1` in `docker-compose.yml`.
 [README → Open issues](./README.md#open-issues).
 
 **CORS.** Allowed origins come from `CORS_ORIGINS` (comma-separated), defaulting to
