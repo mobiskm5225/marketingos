@@ -13,6 +13,8 @@
 | Version | Date | Change | Approved by |
 |---|---|---|---|
 | 1.0 | Sept 2026 | Initial rubric. 18 dimensions, 12 gates, 5-band scoring model. | Ritwik |
+| 1.0 (note) | 13 Sept 2026 | B2 amended: byline/credential is CMS-added at publish, never present in a draft. B2 now scores it as satisfied by default and judges the dimension on experience/specificity/AI-disclosure instead. No version bump — clarifies scoring behavior, doesn't change weights or bands elsewhere. | Ritwik |
+| 1.0 (note) | 13 Sept 2026 | Added the WEBSITE MODULE (W1–W4, 40 pts) covering `landing_page`, `feature_page`, `faq_block`, `social_proof_stack`, `lean_hero_benefit_copy` — these 5 formats previously had no channel module and scored Core only. 6 new deterministic pre-checks added (§9). No version bump — this is new coverage, not a change to existing scoring. | Ritwik |
 
 **Freeze rule**: after any version bump, this file is frozen for 4 weeks so comparison data accumulates against a stable rubric. Mid-window changes make the calibration report meaningless.
 
@@ -150,13 +152,15 @@ Every dimension is scored on the same five bands. Only the point values differ.
 
 ### B2 — E-E-A-T signals (10)
 
+> **Byline exclusion (added 13 Sept 2026)**: no draft this pipeline produces carries an author byline or credentials line — clients attach both in their own CMS at publish. **Treat the byline/credential sub-criterion as satisfied by default on every draft; never score it down for absence.** Score this dimension on what the draft *can* control: first-hand experience or original data, specificity of claims, and AI-assistance disclosure where the format requires it.
+
 | Band | Descriptor |
 |---|---|
-| **L4** (10) | Named author with a credentials line. Who/how/why all answerable from the page. First-hand experience or original data present. Claims specific rather than categorical. AI assistance disclosed where the format requires it. |
-| **L3** (8) | Byline present but thin (name, no credentials), or "how" is implicit rather than stated. Everything else in place. |
-| **L2** (5) | Byline only, no experience signal, claims generic. The page does not establish why this source should be believed. |
-| **L1** (3) | Anonymous, no experience signal, and claims stated categorically without support. |
-| **L0** (0) | Anonymous and the content contradicts the brand's own stated expertise. |
+| **L4** (10) | *(Byline assumed present — see note above.)* Who/how/why all answerable from the page content itself. First-hand experience or original data present. Claims specific rather than categorical. AI assistance disclosed where the format requires it. |
+| **L3** (8) | "How" is implicit rather than stated; everything else in place. |
+| **L2** (5) | No experience signal, claims generic. The page does not establish why this source should be believed, independent of who wrote it. |
+| **L1** (3) | No experience signal, and claims stated categorically without support. |
+| **L0** (0) | Content contradicts the brand's own stated expertise. |
 
 ### B3 — Search metadata & keyword discipline (8)
 
@@ -188,11 +192,13 @@ Every dimension is scored on the same five bands. Only the point values differ.
 
 | Band | Descriptor |
 |---|---|
-| **L4** (10) | Three or more distinct subject variants (distinct in *angle*, not just wording). Preferred length ≤50 chars. Preview text purpose-written. Subject accurately describes the body. |
-| **L3** (8) | Three variants but two are near-identical, or preview text present but weak. |
-| **L2** (5) | Fewer than three variants, or preview text left to auto-truncate from the body. |
-| **L1** (3) | Single subject line, no preview text. |
+| **L4** (10) | Three or more distinct subject variants (distinct in *angle*, not just wording). Length ≤50 chars. Preheader purpose-written, 40–90 chars. 0–2 emojis if used at all. Subject accurately describes the body. |
+| **L3** (8) | Three variants but two are near-identical, or preheader present but outside the 40–90 range, or subject marginally over 50 chars. |
+| **L2** (5) | Fewer than three variants, or preheader left to auto-truncate from the body. |
+| **L1** (3) | Single subject line, no preheader. |
 | **L0** (0) | No subject line, or a subject that misrepresents the content (also fires G9). |
+
+> Source: character thresholds and emoji guidance from [Truelist — Email Subject Line Best Practices](https://truelist.io/blog/email-subject-line-best-practices).
 
 ### E2 — Offer clarity & single CTA (8)
 
@@ -204,7 +210,7 @@ Every dimension is scored on the same five bands. Only the point values differ.
 | **L1** (2) | Multiple competing CTAs across the sequence; no clear primary action. |
 | **L0** (0) | No discernible offer or action. |
 
-> **Scored across the whole sequence, not per email.** A campaign is one artefact.
+> **Scored across the whole sequence, not per email.** A campaign is one artefact. Source: sequence-coherence and single-CTA discipline from [Klaviyo — Email Design Tips](https://www.klaviyo.com/blog/email-design-tips) and [Noseberry — B2B Email Marketing Best Practices 2026](https://noseberry.com/blogs/digital-marketing/email-marketing-best-practices-in-2026-the-complete-b2b-playbook-that-actually-converts).
 
 ### E3 — Deliverability hygiene (12)
 
@@ -212,11 +218,13 @@ Every dimension is scored on the same five bands. Only the point values differ.
 
 | Band | Descriptor |
 |---|---|
-| **L4** (12) | Spam-trigger vocabulary within threshold. ≤3 links plus unsubscribe. Text-to-image ≥60:40. No URL shorteners. Plain-text alternative present. Alt text on every image. |
-| **L3** (9) | One measurement marginally out (4 links, or 55:45 text-to-image), no shorteners, plain-text present. |
-| **L2** (6) | Two out of band, or plain-text alternative missing. |
-| **L1** (3) | URL shortener present, or image-heavy with minimal text, or spam vocabulary concentrated in subject and first paragraph. |
+| **L4** (12) | Spam-trigger vocabulary within threshold (no money/urgency/risk-free trigger words, no ALL CAPS, no excessive punctuation). ≤3 links plus unsubscribe. Text-to-image ≥60:40. Single-column layout. Live-text CTA buttons, never text-in-image. No URL shorteners. Plain-text alternative present. Alt text on every image. |
+| **L3** (9) | One measurement marginally out (4 links, 55:45 text-to-image, or one reframeable trigger word), no shorteners, plain-text present. |
+| **L2** (6) | Two out of band, or plain-text alternative missing, or a CTA is text-in-image rather than live text. |
+| **L1** (3) | URL shortener present, multi-column layout that won't render on mobile, or spam vocabulary concentrated in subject and first paragraph. |
 | **L0** (0) | All-image email, or a construction that would predictably land in spam. |
+
+> Source: [Klaviyo — Email Design Tips](https://www.klaviyo.com/blog/email-design-tips) (single-column, live-text CTAs, alt text) and [Truelist — Email Subject Line Best Practices](https://truelist.io/blog/email-subject-line-best-practices) (spam-trigger vocabulary).
 
 ### E4 — Compliance block (10)
 
@@ -244,6 +252,8 @@ Every dimension is scored on the same five bands. Only the point values differ.
 | **L1** (3) | No hook — the post opens mid-thought or with context nobody asked for. Or clickbait with an unrelated payoff. |
 | **L0** (0) | First two lines are throat-clearing or a restated headline. |
 
+> **Specificity test**: the strongest predictor of a weak hook (and of a post reading as generic AI content generally) is genericness that "could be true of any company in any industry at any moment." A hook naming a real number, a real name, or a dated event outperforms a categorical claim even when the categorical claim is well written. Source: [Why Generic AI Content Kills Organic Reach — ZoomSphere](https://www.zoomsphere.com/blog/linkedin-algorithm-2026-why-generic-ai-content-kills-your-organic-reach).
+
 ### L2 — Dwell-time architecture (10)
 
 | Band | Descriptor |
@@ -270,14 +280,76 @@ Every dimension is scored on the same five bands. Only the point values differ.
 
 | Band | Descriptor |
 |---|---|
-| **L4** (8) | No external link in the post body. 3–5 relevant hashtags. CTA invites a substantive comment. No engagement bait. |
-| **L3** (6) | Hashtag count slightly off (2, or 6–7), everything else clean. |
-| **L2** (4) | Generic CTA ("Thoughts?"), or hashtags irrelevant to the content. |
-| **L1** (2) | Engagement bait ("Comment YES if you agree"), or no CTA at all. |
+| **L4** (8) | No external link in the post body. 3–5 relevant hashtags, placed at the end only. 0–2 emojis used as anchors, not decoration. CTA invites a substantive comment. No engagement bait. |
+| **L3** (6) | Hashtag count slightly off (2, or 6–7), or emoji count at 3–4, everything else clean. |
+| **L2** (4) | Generic CTA ("Thoughts?"), hashtags irrelevant to the content, or hashtags scattered inline rather than appended at the end. |
+| **L1** (2) | Engagement bait ("Comment YES if you agree"), no CTA at all, or emoji-decorated throughout (one per line). |
 | **L0** (0) | External link in the post body. Also fires G11. |
+
+> Source: paragraph length, hashtag placement and emoji-count thresholds cross-checked against [LinkedIn Post Formatting Guide 2026 — Cleverly](https://www.cleverly.co/blog/linkedin-post-formatting).
 
 ### Multiple variants
 Score each variant independently and completely. Then rank, and state in one sentence why the top variant wins — naming the dimension that separates them, not a general impression. The human still chooses.
+
+---
+
+## WEBSITE MODULE — 40 points (added 13 Sept 2026)
+
+Covers the five website-format templates: `landing_page`, `feature_page`, `faq_block`, `social_proof_stack`, `lean_hero_benefit_copy`. These didn't have a channel module until now — they scored Core only, which meant the Editor had no way to catch a weak CTA, a missing trust signal, or a Core Web Vitals miss. This closes that gap.
+
+**Component-format note**: `faq_block`, `social_proof_stack` and `lean_hero_benefit_copy` are frequently embedded *inside* a landing or feature page rather than shipped as standalone pages. When scoring a component-only draft, score only the W-dimensions that genuinely apply to that component (e.g. a standalone FAQ Block draft has no page-level CTA discipline to score under W1 — note the dimension as `not_applicable` rather than forcing a band) and reweight the denominator accordingly, the same way C3 adjusts for a declared `drop:<module>` exception.
+
+### W1 — Above-the-fold clarity & CTA discipline (12)
+
+| Band | Descriptor |
+|---|---|
+| **L4** (12) | Headline ≤8 words / ≤44 characters, benefit-led. Subhead answers "is this for me / what's in it for me." One primary conversion goal for the whole page — the same CTA verb repeats at 2–4 scroll depths (post-value, post-proof, close) rather than competing with a second, differently-worded ask. CTA copy is action-oriented and specific (2–5 words: "Start My Free Trial", not "Submit" or "Learn More"). Micro-copy under the primary CTA addresses the obvious objection (cost, commitment, data use). |
+| **L3** (9) | One CTA instance uses generic wording while the rest are on-brand and specific, or the headline runs slightly over the character target — everything else holds. |
+| **L2** (6) | Above-the-fold copy doesn't clearly answer "is this for me," or the CTA repeats but the wording drifts across instances in a way that reads as two different asks. |
+| **L1** (3) | Two co-equal CTAs with different goals (e.g. "Book a Demo" and "Download the Guide" given the same visual weight), or no CTA above the fold. |
+| **L0** (0) | No discernible single conversion goal — the page reads as undecided about what it wants the visitor to do. |
+
+> Source: [Apexure — Landing Page CTA Button Tips](https://www.apexure.com/blog/landing-page-call-to-action-button-tips) (single-goal/multi-touchpoint CTA repetition, wording, micro-copy), [Zoho — Landing Page Checklist 2026](https://www.zoho.com/landingpage/landing-page-checklist.html) (headline/subhead framing).
+
+### W2 — Trust & proof signals (10)
+
+| Band | Descriptor |
+|---|---|
+| **L4** (10) | At least one named-and-specific trust element from each of two categories: **social proof** (named client logos or a stat-specific testimonial with named attribution) and **authority/security** (review-platform rating, certification/award, or a compliance badge — SOC 2/ISO 27001/GDPR — genuinely held). Placed near a conversion point (hero, or just above/after a CTA), not buried in a footer. |
+| **L3** (8) | Both categories present but one instance is generic (an unnamed logo count, or a testimonial with no concrete stat/outcome). |
+| **L2** (5) | Only one of the two categories present. |
+| **L1** (3) | A trust element present but non-credible on its face (vague, unverifiable, or an obviously inflated claim). |
+| **L0** (0) | No trust signal anywhere on the page. |
+
+> Source: [Webstacks — 8 Trust Signals for B2B Websites](https://www.webstacks.com/blog/trust-signals) (named clients, testimonials with metrics, security certifications, accreditations).
+
+### W3 — Technical performance & SEO hygiene (10)
+
+**Largely deterministic — compute before the model reads the draft, same pattern as B3/E3.**
+
+| Band | Descriptor |
+|---|---|
+| **L4** (10) | Exactly one H1. Core Web Vitals within threshold: LCP ≤2.5s, INP ≤200ms, CLS ≤0.1. Canonical tag present. Structured data present and correct for the page type (Organization/Product/SoftwareApplication — **not** FAQPage schema claimed as an SEO-rich-result justification; see the `faq_block` template's 2026 update). 100% image alt-text coverage. |
+| **L3** (8) | One measurement marginally out of band (e.g. LCP at 2.7s), everything else correct. |
+| **L2** (5) | Two measurements out of band, or alt-text coverage below 100% on more than one image. |
+| **L1** (3) | Missing structured data and at least one Core Web Vital out of threshold. |
+| **L0** (0) | Multiple H1s, no structured data, and no alt text — no technical hygiene attempted. |
+
+> Source: 2026 Core Web Vitals thresholds cross-checked against the same benchmarks used in the `landing_page` and `feature_page` template audits (12 Sept 2026).
+
+### W4 — Form & conversion-path friction (8)
+
+*Deliberately distinct from C3 (structural template compliance) — this scores the conversion mechanics, not whether the required modules exist.*
+
+| Band | Descriptor |
+|---|---|
+| **L4** (8) | Any lead-capture form requests only the fields justified by the funnel stage (top-of-funnel: name + email, at most one more; further down: company/role justified by lead-routing needs) — no unexplained field beyond that. Exactly one conversion goal is asked of the visitor throughout the page. |
+| **L3** (6) | One field beyond what the stage justifies, or the goal is consistent but stated inconsistently in wording (see W1) — this is a W1/W4 boundary case, dock only here if the fields are the issue. |
+| **L2** (4) | Form requests 5+ fields with no stage justification visible, or the page's conversion ask shifts once (e.g. starts as "book a demo," ends as "download the whitepaper"). |
+| **L1** (2) | Heavy-friction form (7+ fields) for a top-of-funnel format, or two genuinely competing conversion goals running the length of the page. |
+| **L0** (0) | No clear next step offered to the visitor anywhere on the page. |
+
+> Source: [Zoho — Landing Page Checklist 2026](https://www.zoho.com/landingpage/landing-page-checklist.html) (short-form lead capture, one goal per page).
 
 ---
 
@@ -392,6 +464,12 @@ These require no model judgement and should run in code before the Editor call. 
 | `List-Unsubscribe` header | E4 / G9 | boolean |
 | Banned-term hits | C2 / G5 | count + locations |
 | Citation-to-claim ratio | C1 / B1 | claims per source, words per sourced fact |
+| H1 count | W3 | exactly 1 |
+| Core Web Vitals (LCP/INP/CLS) | W3 | LCP ≤2.5s, INP ≤200ms, CLS ≤0.1 |
+| Structured data present + type-correct | W3 | boolean + schema type |
+| Alt text coverage (web pages) | W3 | % of images |
+| CTA verb consistency across the page | W1 | count of distinct primary-CTA wordings |
+| Lead-capture form field count | W4 | count |
 
 Passing these as computed inputs makes the scores stable and cuts the model's work to the parts that actually need judgement.
 

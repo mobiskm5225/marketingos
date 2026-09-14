@@ -109,7 +109,7 @@ Structure: **Shared Editorial Core (60 pts) + Channel Module (40 pts) = 100**.
 | ID | Dimension | Pts | Standard |
 |---|---|---|---|
 | B1 | **AI-answer readiness (GEO/AEO)** | 14 | Answer-first block of 40–60 words under each question heading; strict H1→H2→H3 hierarchy; headings framed as questions where natural; a verifiable, sourced fact roughly every 150–200 words; at least one list or table; an FAQ block where the format allows |
-| B2 | **E-E-A-T signals** | 10 | Named author with credentials; "who / how / why" answerable from the page; first-hand experience or original data present; claims specific rather than generic; AI assistance disclosed where the format requires it |
+| B2 | **E-E-A-T signals** | 10 | Byline/credentials excluded from scoring — added by the client's CMS at publish, never present in a draft. Scored instead on: "who / how / why" answerable from the page content; first-hand experience or original data present; claims specific rather than generic; AI assistance disclosed where the format requires it |
 | B3 | **Search metadata & keyword discipline** | 8 | Title tag ≤60 chars, meta description 140–160 chars, primary keyword in H1 and first 100 words, semantic coverage of the SERP's subtopics, no stuffing |
 | B4 | **Internal linking & conversion path** | 8 | 3+ contextual internal links to existing KB-registered content; one CTA matched to funnel stage; no dead or placeholder links |
 
@@ -254,19 +254,21 @@ The Editor loads its rubric profile by matching the draft's `Format Key` against
 | blog_post (MOFU) | `mofu_comparison_buyers_guide` | ✔ | Blog | Comparison table, evaluation criteria, differentiator angle from KB, balanced framing |
 | blog_post (BOFU) | `bofu_objection_competitor_comparison` | ✔ | Blog | Objection→response pairs, dated competitor evidence, migration/switch path, direct CTA |
 | case_study | `case_study` | ✔ | Blog | Client context, problem, intervention, named metric with consent, quote, outcome |
-| landing_page | `landing_page` | ✔ | Blog (B1 replaced by conversion-structure check) | Hero, benefit stack, social proof, FAQ, single conversion goal |
-| feature_page | `feature_page` | ✔ | Blog (as above) | Job-to-be-done framing, capability blocks, proof, integration/pricing bridge |
-| faq_block | `faq_block` | ✔ | Blog (B1 weighted up) | Real objections, answer-first, no marketing evasion |
-| social_proof_stack | `social_proof_stack` | ✔ | Blog (as above) | Named attribution, consent recorded, no fabricated testimonials |
-| lean_hero_benefit_copy | `lean_hero_benefit_copy` | ✔ | Blog (as above) | Single-sentence value prop, benefit not feature, one CTA |
-| email_campaign | *(pending — build next)* | ✔ | Email | Per-email: subject variants, preview text, single CTA, compliance block |
-| linkedin_post | *(pending — build next)* | ✔ | LinkedIn | Hook, body, payoff, CTA; profile signature structure |
+| landing_page | `landing_page` | ✔ | **Website** (added 13 Sept) | Hero, benefit stack, social proof, FAQ, single conversion goal |
+| feature_page | `feature_page` | ✔ | **Website** | Four-question above-fold test, workflow-ordered deep-dives, proof, security badges where technical |
+| faq_block | `faq_block` | ✔ | **Website** (W1/W4 often n/a — component format, see rubric note) | Real objections, answer-first, every answer adds information, no marketing evasion |
+| social_proof_stack | `social_proof_stack` | ✔ | **Website** (W1/W4 often n/a — component format) | Named attribution, consent recorded, no fabricated testimonials |
+| lean_hero_benefit_copy | `lean_hero_benefit_copy` | ✔ | **Website** (component format) | Single-sentence value prop, benefit not feature, one CTA |
+| email_campaign | `email_campaign` | ✔ | Email | Sequence goal, per-email structure (subject/preheader/CTA/compliance), trigger logic, exit conditions |
+| linkedin_post | `linkedin_post` | ✔ | LinkedIn | Moment, People, Meaning, Open Door — all four required; ≤200-char hook before "see more"; no external link in body; single profile voice doc only |
 | thought_leadership | *(pending)* | ✔ | Blog (B3 dropped, C6 weighted up) | Contrarian POV, first-party evidence, named stake |
 | sales_enablement | *(pending)* | ✔ | Core only, ×1.67 | Objection coverage, positioning accuracy, no unauthorised claims |
 | competitor_content | *(pending)* | ✔ | Blog | Dated evidence per claim, visible metrics only, no reach/impression claims |
 | performance_report | *(pending)* | ✔ | Core only, ×1.67 | Period comparison, data provenance, recommendation tied to a number |
 
 **Unmapped `Format Key`**: the Editor runs Core + best-matching channel module, scores it, and flags `template_unmapped` in the review layer so the gap surfaces in the weekly calibration.
+
+> **Update (13 Sept 2026)**: added the **Website module** (W1–W4, 40 pts — above-fold clarity/CTA discipline, trust & proof signals, technical/Core-Web-Vitals hygiene, form/conversion-path friction) to `editor-rubric-v1.0.md`, covering the 5 website-format templates above, which previously scored Core only. **Open question, not yet resolved**: none of these 5 formats currently appear in the trigger list (§7) — the Editor only auto-fires on Blog Agent, Email Campaign Skill and Li Agent output. The Website module is ready to score them the moment they're either (a) added to the trigger list, or (b) run manually. Decide which before shadow mode includes website formats.
 
 ---
 
@@ -292,7 +294,7 @@ SHARED CORE                 44/60
 
 BLOG MODULE                 34/40
   B1 AI-answer readiness    11/14   No answer-first block under H2 #2 and #4
-  B2 E-E-A-T                 8/10   Author byline present, no credentials line
+  B2 E-E-A-T                 8/10   "How" implicit rather than stated (byline/credentials excluded from scoring — CMS-added at publish)
   B3 Metadata                7/8    Title tag 68 chars
   B4 Internal links & CTA    8/8
 

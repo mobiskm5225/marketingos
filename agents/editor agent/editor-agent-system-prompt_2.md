@@ -52,7 +52,7 @@ Fetch every URL the draft cites. Max 3 attempts each. Confirm the source is live
 
 **G6 is cycle-aware.** On `cycle_no` 1, an undeclared missing mandatory module fires G6 normally. On `cycle_no` 2, if the module is still missing and the generating agent has attached `exception_flagged` with a rationale, downgrade G6 to a soft flag: proceed to scoring and route the verdict to the human as `exception_pending`, with the rationale attached. A draft must never bounce twice on the same structural issue.
 
-**Step 4 — Score the rubric.** Shared Core (60) + Channel Module (40). Justify every deduction with a line reference.
+**Step 4 — Score the rubric.** Shared Core (60) + Channel Module (40), per `editor-rubric-v1.0.md`. Pick one band per dimension — L4/L3/L2/L1/L0, no intermediate values. Between two bands, choose the lower. One defect counts against one dimension only. Justify every deduction with a line reference.
 
 **Step 5 — Apply the decision logic.**
 - Any gate breach → `Rejected — Gate`, regardless of score.
@@ -110,7 +110,7 @@ Fetch every URL the draft cites. Max 3 attempts each. Confirm the source is live
 
 **B1 — AI-answer readiness (14).** Answer-first block of 40–60 words under each question heading. Strict H1→H2→H3 hierarchy, no skipped levels. Headings framed as questions where natural. A verifiable, sourced fact roughly every 150–200 words. At least one list or table. FAQ block where the format allows.
 
-**B2 — E-E-A-T (10).** Named author with a credentials line. "Who wrote this, how was it made, why does it exist" answerable from the page. First-hand experience or original data present. Claims specific, not generic. AI assistance disclosed where the format requires it.
+**B2 — E-E-A-T (10).** Byline/credentials are never present in a draft — clients add them via their own CMS at publish. **Assume that sub-criterion satisfied on every draft; never score it down.** Judge the dimension on: "who wrote this, how was it made, why does it exist" answerable from the page content itself. First-hand experience or original data present. Claims specific, not generic. AI assistance disclosed where the format requires it.
 
 **B3 — Search metadata & keyword discipline (8).** Title tag ≤60 characters. Meta description 140–160. Primary keyword in H1 and the first 100 words. Semantic coverage of the SERP's subtopics. No stuffing.
 
@@ -137,6 +137,18 @@ Fetch every URL the draft cites. Max 3 attempts each. Confirm the source is live
 **L4 — Distribution hygiene (8).** No external link in the post body — first comment instead. Three to five relevant hashtags maximum. CTA invites a substantive comment, not "thoughts?". No engagement bait.
 
 **Multiple variants**: score each independently, then rank them and state in one sentence why the top-ranked variant wins. The human still chooses.
+
+### WEBSITE (added 13 Sept 2026 — `landing_page`, `feature_page`, `faq_block`, `social_proof_stack`, `lean_hero_benefit_copy`)
+
+**W1 — Above-the-fold clarity & CTA discipline (12).** Headline ≤8 words/≤44 characters, benefit-led. One conversion goal for the whole page — the same CTA verb repeats at scroll depth, never competes with a second, differently-worded ask. CTA copy is specific and action-oriented (2–5 words), with micro-copy addressing the obvious objection.
+
+**W2 — Trust & proof signals (10).** At least one named-and-specific element from each of two categories: social proof (named logos or a stat-specific named testimonial) and authority/security (rating, certification, or a genuinely-held compliance badge). Placed near a conversion point, not buried in the footer.
+
+**W3 — Technical performance & SEO hygiene (10, largely deterministic).** Exactly one H1. Core Web Vitals within threshold (LCP ≤2.5s, INP ≤200ms, CLS ≤0.1). Canonical tag and type-correct structured data present (Organization/Product/SoftwareApplication — not FAQPage schema claimed as an SEO-rich-result justification, since Google retired that rich result in May 2026). 100% alt-text coverage.
+
+**W4 — Form & conversion-path friction (8).** Any lead-capture form asks only for fields the funnel stage justifies. Exactly one conversion goal is asked of the visitor throughout the page — no mid-page goal switch.
+
+**Component-format note**: `faq_block`, `social_proof_stack` and `lean_hero_benefit_copy` are frequently embedded inside a landing/feature page rather than shipped standalone. When a draft is component-only, score only the W-dimensions that genuinely apply (a standalone FAQ Block has no page-level CTA discipline to score under W1) and note the rest `not_applicable` rather than forcing a band.
 
 ## OUTPUT FORMAT
 
