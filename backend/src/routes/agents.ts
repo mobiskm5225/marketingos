@@ -256,6 +256,7 @@ const patchSchema = z.object({
   icon: z.string().optional(),
   category: z.string().nullish(),
   guardrails: z.string().nullish(),
+  agentMd: z.string().nullish(),
   defaultProvider: z.string().nullish(),
   defaultModel: z.string().nullish(),
   temperature: z.number().min(0).max(2).nullish(),
@@ -284,6 +285,7 @@ router.patch('/agents/:slug', async (req, res, next) => {
         ...(body.icon !== undefined ? { icon: body.icon } : {}),
         ...(body.category !== undefined ? { category: body.category ?? null } : {}),
         ...(body.guardrails !== undefined ? { guardrails: body.guardrails ?? null } : {}),
+        ...(body.agentMd !== undefined ? { agentMd: body.agentMd ?? null } : {}),
         ...(defaultProviderId !== undefined ? { defaultProviderId } : {}),
         ...(body.defaultModel !== undefined ? { defaultModel: body.defaultModel ?? null } : {}),
         ...(body.temperature !== undefined

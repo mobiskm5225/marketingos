@@ -423,6 +423,7 @@ export const api = {
       status: "active" | "draft" | "paused";
       category: string | null;
       guardrails: string | null;
+      agentMd: string | null;
       defaultProvider: string | null;
       defaultModel: string | null;
       temperature: number | null;

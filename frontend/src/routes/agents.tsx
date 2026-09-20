@@ -160,13 +160,14 @@ function AgentsPage() {
     setBusy(true);
     try {
       const payload: StageWrite[] = next.map((s) => ({
-        id: s.id,
+        id: s.id.startsWith("new-") ? undefined : s.id,
         skill: s.skill,
         position: s.position,
         dependsOn: s.dependsOn,
         isGate: s.isGate,
         provider: s.provider,
         model: s.model,
+        bodyOverride: s.hasOverride ? s.promptBody : null,
       }));
       await api.saveStages(detail.id, payload);
       await reload();
@@ -365,6 +366,7 @@ function AgentsPage() {
                   )}
 
                   <PipelineMap
+                    agent={detail}
                     stages={detail.stages}
                     levels={detail.levels}
                     selectedId={selectedStageId}
@@ -372,85 +374,51 @@ function AgentsPage() {
                     onSelect={setSelectedStageId}
                     isFullscreen={workspaceFullscreen}
                     onToggleFullscreen={toggleWorkspaceFullscreen}
+                    skills={skills}
+                    choices={choices}
+                    busy={busy}
+                    onSaveAgentPrompt={async (newPrompt) => {
+                      await patchAgent({ agentMd: newPrompt }, "Agent persona prompt saved");
+                    }}
+                    onSaveAgentModel={async (provider, model) => {
+                      await patchAgent(
+                        { defaultProvider: provider, defaultModel: model },
+                        "Default model updated",
+                      );
+                    }}
+                    onUpdateStage={(updatedStage) => {
+                      void saveStages(
+                        detail.stages.map((s) => (s.id === updatedStage.id ? updatedStage : s)),
+                      );
+                    }}
+                    onRemoveStage={(stageId) => {
+                      void saveStages(detail.stages.filter((s) => s.id !== stageId));
+                      setSelectedStageId(null);
+                    }}
+                    onAddStage={(skillSlug, provider, model) => {
+                      const last = detail.stages[detail.stages.length - 1];
+                      const skillObj = skills.find((s) => s.id === skillSlug);
+                      const next: AgentStage[] = [
+                        ...detail.stages,
+                        {
+                          id: `new-${Date.now()}`,
+                          skill: skillSlug,
+                          skillName: skillObj?.name ?? skillSlug,
+                          description: skillObj?.description ?? "",
+                          category: skillObj?.category ?? null,
+                          position: (last?.position ?? 0) + 1,
+                          dependsOn: last ? [last.id] : [],
+                          isGate: false,
+                          provider,
+                          model,
+                          hasOverride: false,
+                          promptBody: "",
+                        },
+                      ];
+                      void saveStages(next);
+                    }}
+                    onRun={() => setRunOpen(true)}
                   />
-
-                  {/* Stage controls ride on the canvas in fullscreen. */}
-                  <div
-                    className={cn(
-                      "flex flex-wrap items-center gap-2",
-                      workspaceFullscreen &&
-                        "absolute right-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-lg border border-border bg-card p-2 shadow-lg",
-                    )}
-                  >
-                    <AddStage
-                      skills={skills}
-                      choices={choices}
-                      defaultModel={detail.defaultModel}
-                      agentCategory={detail.category}
-                      used={detail.stages.map((s) => s.skill)}
-                      disabled={busy}
-                      onAdd={(skillSlug, provider, model) => {
-                        const last = detail.stages[detail.stages.length - 1];
-                        const next: AgentStage[] = [
-                          ...detail.stages,
-                          {
-                            id: `new-${Date.now()}`,
-                            skill: skillSlug,
-                            skillName: skillSlug,
-                            description: "",
-                            category: null,
-                            position: (last?.position ?? 0) + 1,
-                            dependsOn: last ? [last.id] : [],
-                            isGate: false,
-                            provider,
-                            model,
-                            hasOverride: false,
-                            promptBody: "",
-                          },
-                        ];
-                        void saveStages(next);
-                      }}
-                    />
-                    <p
-                      className={cn(
-                        "text-xs text-muted-foreground",
-                        workspaceFullscreen && "hidden",
-                      )}
-                    >
-                      Stages in the same column run in parallel.
-                    </p>
-                  </div>
-
-                  {/* Skills summary table — quick overview of attached skills */}
-                  {!workspaceFullscreen && detail.stages.length > 0 && (
-                    <SkillsSummary stages={detail.stages} selectedId={selectedStageId} onSelect={setSelectedStageId} />
-                  )}
-
-                  {stage && (!workspaceFullscreen || agentTab === "pipeline") && (
-                    <div
-                      className={cn(
-                        workspaceFullscreen &&
-                          "no-scrollbar absolute bottom-4 right-4 top-20 z-10 w-[420px] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-border bg-card shadow-xl",
-                      )}
-                    >
-                    <StagePanel
-                      stage={stage}
-                      allStages={detail.stages}
-                      choices={choices}
-                      defaultModel={detail.defaultModel}
-                      busy={busy}
-                      onClose={() => setSelectedStageId(null)}
-                      onChange={(updated) =>
-                        void saveStages(
-                          detail.stages.map((s) => (s.id === updated.id ? updated : s)),
-                        )
-                      }
-                      onRemove={() =>
-                        void saveStages(detail.stages.filter((s) => s.id !== stage.id))
-                      }
-                    />
-                    </div>
-                  )}
                 </div>
 
                 <TabsContent
