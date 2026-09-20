@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Bot, Play, Plus, Save, Trash2, TriangleAlert, X } from "lucide-react";
+import { Bot, FileText, Play, Plus, Save, Settings, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { Markdown } from "@/components/Markdown";
 import { PipelineMap } from "@/components/PipelineMap";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -397,12 +398,14 @@ function AgentsPage() {
                             skill: skillSlug,
                             skillName: skillSlug,
                             description: "",
+                            category: null,
                             position: (last?.position ?? 0) + 1,
                             dependsOn: last ? [last.id] : [],
                             isGate: false,
                             provider,
                             model,
                             hasOverride: false,
+                            promptBody: "",
                           },
                         ];
                         void saveStages(next);
@@ -418,11 +421,16 @@ function AgentsPage() {
                     </p>
                   </div>
 
+                  {/* Skills summary table — quick overview of attached skills */}
+                  {!workspaceFullscreen && detail.stages.length > 0 && (
+                    <SkillsSummary stages={detail.stages} selectedId={selectedStageId} onSelect={setSelectedStageId} />
+                  )}
+
                   {stage && (!workspaceFullscreen || agentTab === "pipeline") && (
                     <div
                       className={cn(
                         workspaceFullscreen &&
-                          "no-scrollbar absolute bottom-4 right-4 top-20 z-10 w-[360px] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-border bg-card shadow-xl",
+                          "no-scrollbar absolute bottom-4 right-4 top-20 z-10 w-[420px] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-border bg-card shadow-xl",
                       )}
                     >
                     <StagePanel
@@ -564,6 +572,50 @@ function AgentsPage() {
 
 // ─── Stage editor ─────────────────────────────────────────────────────────────
 
+/** Compact skills summary table below the canvas — makes it clear which skills are attached. */
+function SkillsSummary({
+  stages,
+  selectedId,
+  onSelect,
+}: {
+  stages: AgentStage[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="panel overflow-hidden rounded-lg border border-border">
+      <div className="border-b border-border bg-muted/30 px-4 py-2.5">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pipeline skills ({stages.length})</h4>
+      </div>
+      <div className="divide-y divide-border">
+        {stages.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => onSelect(s.id)}
+            className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs transition-colors hover:bg-muted/30 ${
+              s.id === selectedId ? "bg-primary/5" : ""
+            }`}
+          >
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-semibold text-muted-foreground">
+              {s.position}
+            </span>
+            <span className="min-w-0 flex-1 truncate font-medium">{s.skillName || s.skill}</span>
+            {s.category && (
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{s.category}</span>
+            )}
+            {s.isGate && (
+              <ShieldCheck className="size-3.5 shrink-0 text-accent" />
+            )}
+            {s.hasOverride && (
+              <span className="shrink-0 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary">custom</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StagePanel({
   stage,
   allStages,
@@ -583,114 +635,181 @@ function StagePanel({
   onChange: (stage: AgentStage) => void;
   onRemove: () => void;
 }) {
+  const [panelTab, setPanelTab] = useState<"prompt" | "config">("prompt");
   const value = stage.model ? `${stage.provider}::${stage.model}` : "__inherit__";
 
   return (
-    <section className="panel p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-medium">{stage.skill}</p>
-          <p className="text-xs text-muted-foreground">
-            Stage {stage.position}
-            {stage.hasOverride && " · uses an agent-specific version of this skill"}
-          </p>
+    <section className="panel space-y-0 overflow-hidden rounded-lg">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/20 px-5 py-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            {stage.isGate ? (
+              <ShieldCheck className="size-4 shrink-0 text-accent" />
+            ) : (
+              <Play className="size-4 shrink-0 text-primary" style={{ fill: "currentColor" }} />
+            )}
+            <p className="truncate text-sm font-semibold">{stage.skillName || stage.skill}</p>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Stage {stage.position}</span>
+            {stage.category && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{stage.category}</span>
+            )}
+            {stage.hasOverride && (
+              <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">agent-specific override</span>
+            )}
+          </div>
+          {stage.description && (
+            <p className="mt-1.5 text-xs text-muted-foreground">{stage.description}</p>
+          )}
         </div>
-        <Button variant="secondary" size="sm" onClick={onClose}>
+        <Button variant="ghost" size="sm" onClick={onClose} className="shrink-0">
           <X className="size-3.5" />
         </Button>
       </div>
 
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Model</Label>
-          <Select
-            value={value}
-            onValueChange={(v) => {
-              if (v === "__inherit__") {
-                onChange({ ...stage, provider: null, model: null });
-                return;
-              }
-              const [provider, model] = v.split("::");
-              onChange({ ...stage, provider: provider!, model: model! });
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__inherit__">
-                Inherit — {defaultModel ?? "no agent default set"}
-              </SelectItem>
-              {choices.map((c) => (
-                <SelectItem key={`${c.provider}::${c.model}`} value={`${c.provider}::${c.model}`}>
-                  {c.model} · {c.provider}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Leave on inherit for cheap stages and override only where quality matters.
-          </p>
-        </div>
+      {/* Tab navigation */}
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setPanelTab("prompt")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
+            panelTab === "prompt"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <FileText className="size-3.5" />
+          Prompt
+        </button>
+        <button
+          onClick={() => setPanelTab("config")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
+            panelTab === "config"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Settings className="size-3.5" />
+          Configuration
+        </button>
+      </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Gate</Label>
+      {/* Tab content */}
+      <div className="p-5">
+        {panelTab === "prompt" ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Skill instructions sent to LLM</p>
+            </div>
+            {stage.promptBody ? (
+              <div className="max-h-[500px] overflow-y-auto rounded-md border border-border bg-muted/20 p-4">
+                <Markdown source={stage.promptBody} />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center rounded-md border border-dashed border-border p-8 text-center">
+                <p className="text-xs text-muted-foreground">
+                  No prompt body available — the skill will be loaded at runtime.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Model picker */}
+            <div className="space-y-2">
+              <Label>Model</Label>
+              <Select
+                value={value}
+                onValueChange={(v) => {
+                  if (v === "__inherit__") {
+                    onChange({ ...stage, provider: null, model: null });
+                    return;
+                  }
+                  const [provider, model] = v.split("::");
+                  onChange({ ...stage, provider: provider!, model: model! });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__inherit__">
+                    Inherit — {defaultModel ?? "no agent default set"}
+                  </SelectItem>
+                  {choices.map((c) => (
+                    <SelectItem key={`${c.provider}::${c.model}`} value={`${c.provider}::${c.model}`}>
+                      {c.model} · {c.provider}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                A failing gate sends work back instead of finishing the run.
+                Leave on inherit for cheap stages and override only where quality matters.
               </p>
             </div>
-            <Switch
-              checked={stage.isGate}
-              disabled={busy}
-              onCheckedChange={(isGate) => onChange({ ...stage, isGate })}
-            />
+
+            {/* Gate toggle */}
+            <div className="flex items-center justify-between rounded-md border border-border px-4 py-3">
+              <div>
+                <Label>Quality gate</Label>
+                <p className="text-xs text-muted-foreground">
+                  A failing gate sends work back instead of finishing the run.
+                </p>
+              </div>
+              <Switch
+                checked={stage.isGate}
+                disabled={busy}
+                onCheckedChange={(isGate) => onChange({ ...stage, isGate })}
+              />
+            </div>
+
+            {/* Dependencies */}
+            <div>
+              <Label>Runs after</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {allStages
+                  .filter((s) => s.id !== stage.id)
+                  .map((other) => {
+                    const on = stage.dependsOn.includes(other.id);
+                    return (
+                      <button
+                        key={other.id}
+                        disabled={busy}
+                        onClick={() =>
+                          onChange({
+                            ...stage,
+                            dependsOn: on
+                              ? stage.dependsOn.filter((d) => d !== other.id)
+                              : [...stage.dependsOn, other.id],
+                          })
+                        }
+                        className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                          on
+                            ? "border-primary/60 bg-primary/10 text-foreground"
+                            : "border-dashed border-border text-muted-foreground hover:border-primary/40"
+                        }`}
+                      >
+                        {other.position}. {other.skill}
+                      </button>
+                    );
+                  })}
+              </div>
+              {stage.dependsOn.length === 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  No dependencies — this stage starts in the first level.
+                </p>
+              )}
+            </div>
+
+            {/* Remove */}
+            <div className="flex justify-end border-t border-border pt-4">
+              <Button variant="secondary" size="sm" disabled={busy} onClick={onRemove}>
+                <Trash2 className="size-3.5" /> Remove stage
+              </Button>
+            </div>
           </div>
-        </div>
-      </div>
-
-      <div className="mt-5">
-        <Label>Runs after</Label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {allStages
-            .filter((s) => s.id !== stage.id)
-            .map((other) => {
-              const on = stage.dependsOn.includes(other.id);
-              return (
-                <button
-                  key={other.id}
-                  disabled={busy}
-                  onClick={() =>
-                    onChange({
-                      ...stage,
-                      dependsOn: on
-                        ? stage.dependsOn.filter((d) => d !== other.id)
-                        : [...stage.dependsOn, other.id],
-                    })
-                  }
-                  className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                    on
-                      ? "border-primary/60 bg-primary/10 text-foreground"
-                      : "border-dashed border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-                >
-                  {other.position}. {other.skill}
-                </button>
-              );
-            })}
-        </div>
-        {stage.dependsOn.length === 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            No dependencies — this stage starts in the first level.
-          </p>
         )}
-      </div>
-
-      <div className="mt-5 flex justify-end">
-        <Button variant="secondary" size="sm" disabled={busy} onClick={onRemove}>
-          <Trash2 className="size-3.5" /> Remove stage
-        </Button>
       </div>
     </section>
   );

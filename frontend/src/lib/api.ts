@@ -216,6 +216,7 @@ export interface AgentStage {
   skill: string;
   skillName: string;
   description: string;
+  category: string | null;
   position: number;
   dependsOn: string[];
   isGate: boolean;
@@ -223,6 +224,8 @@ export interface AgentStage {
   provider: string | null;
   model: string | null;
   hasOverride: boolean;
+  /** The actual prompt text (bodyOverride ?? skill.bodyMd) sent to the LLM. */
+  promptBody: string;
 }
 
 export interface AgentInput {

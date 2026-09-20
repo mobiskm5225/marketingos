@@ -129,6 +129,7 @@ router.get('/agents/:slug', async (req, res, next) => {
       skill: skill.slug,
       skillName: skill.name,
       description: skill.description,
+      category: skill.category ?? null,
       position: stage.position,
       dependsOn: stage.dependsOn,
       isGate: stage.isGate,
@@ -136,6 +137,8 @@ router.get('/agents/:slug', async (req, res, next) => {
       provider: providerSlug,
       model: stage.model,
       hasOverride: Boolean(stage.bodyOverride),
+      // The actual prompt text the runner will use for this stage.
+      promptBody: stage.bodyOverride ?? skill.bodyMd,
     }));
 
     // Levels are computed, never stored, so the map and the runner never drift.

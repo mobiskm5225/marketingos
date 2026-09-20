@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Maximize, Minimize } from "lucide-react";
+import { Maximize, Minimize, Play, ShieldCheck } from "lucide-react";
 import {
   Background,
   Controls,
@@ -45,8 +45,8 @@ export function PipelineMap({
 }) {
   const { nodes, edges } = useMemo(() => {
     const byId = new Map(stages.map((s) => [s.id, s]));
-    const columnWidth = 240;
-    const rowHeight = 104;
+    const columnWidth = 280;
+    const rowHeight = 120;
 
     const nodes: Node[] = [];
     levels.forEach((level, column) => {
@@ -137,6 +137,21 @@ export function PipelineMap({
   );
 }
 
+/** Category → hue mapping for visual variety on nodes. */
+const categoryHues: Record<string, string> = {
+  "social-media": "210",
+  "email-marketing": "330",
+  "content-marketing": "150",
+  "editorial": "45",
+  "seo": "270",
+};
+
+function getCategoryColor(category: string | null): string {
+  if (!category) return "hsl(var(--muted-foreground))";
+  const hue = categoryHues[category] ?? "200";
+  return `hsl(${hue}, 60%, 55%)`;
+}
+
 function StageNode({ data }: { data: Record<string, unknown> }) {
   const stage = data.stage as AgentStage;
   const defaultModel = data.defaultModel as string | null;
@@ -146,32 +161,62 @@ function StageNode({ data }: { data: Record<string, unknown> }) {
   // Blank on the stage means it inherits — show what it will actually run on.
   const resolved = stage.model ?? defaultModel;
   const inherited = !stage.model;
+  const catColor = getCategoryColor(stage.category);
 
   return (
     <div
-      className={`w-[196px] cursor-pointer rounded-md border bg-card px-3 py-2 text-left shadow-sm transition-[border-color,box-shadow] duration-150 ${
-        selected ? "border-primary" : stage.isGate ? "border-accent/60" : "border-border"
+      className={`stage-node w-[220px] cursor-pointer rounded-lg border bg-card px-3.5 py-2.5 text-left shadow-md transition-all duration-200 ${
+        selected
+          ? "border-primary ring-1 ring-primary/30 shadow-primary/10 shadow-lg"
+          : stage.isGate
+            ? "border-accent/60 hover:border-accent/80"
+            : "border-border hover:border-primary/40"
       }`}
+      title={stage.description || stage.skillName}
     >
       <Handle type="target" position={Position.Left} className="!size-1.5 !border-0 !bg-border" />
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          L{level} · {stage.position}
-        </span>
-        {stage.isGate && (
-          <span className="rounded-sm bg-accent/15 px-1 text-[10px] text-accent">gate</span>
+        <div className="flex items-center gap-1.5">
+          {stage.isGate ? (
+            <ShieldCheck className="size-3 text-accent" />
+          ) : (
+            <Play className="size-3 text-primary" style={{ fill: "currentColor" }} />
+          )}
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            L{level} · {stage.position}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {stage.isGate && (
+            <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[9px] font-medium uppercase text-accent">gate</span>
+          )}
+          {stage.hasOverride && (
+            <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[9px] font-medium uppercase text-primary">custom</span>
+          )}
+        </div>
+      </div>
+      <p className="mt-1 truncate text-xs font-semibold">{stage.skillName || stage.skill}</p>
+      {stage.description && (
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{stage.description}</p>
+      )}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <p
+          className={`truncate text-[10px] ${
+            inherited ? "text-muted-foreground" : "text-primary"
+          }`}
+          title={resolved ?? "no model set"}
+        >
+          {resolved ?? "no model"}
+          {inherited && resolved ? " (inherit)" : ""}
+        </p>
+        {stage.category && (
+          <span
+            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: catColor }}
+            title={stage.category}
+          />
         )}
       </div>
-      <p className="mt-0.5 truncate text-xs font-medium">{stage.skill}</p>
-      <p
-        className={`mt-1 truncate text-[10px] ${
-          inherited ? "text-muted-foreground" : "text-primary"
-        }`}
-        title={resolved ?? "no model set"}
-      >
-        {resolved ?? "no model"}
-        {inherited && resolved ? " (inherit)" : ""}
-      </p>
       <Handle type="source" position={Position.Right} className="!size-1.5 !border-0 !bg-border" />
     </div>
   );
