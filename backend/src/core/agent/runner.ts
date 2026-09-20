@@ -11,7 +11,7 @@
  * Concurrency is limited by a semaphore to prevent overwhelming local models.
  */
 
-import { eq, asc, inArray, sql } from 'drizzle-orm';
+import { eq, asc, inArray, sql, or, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import {
   agents,
@@ -193,13 +193,15 @@ async function executeRun(runId: string, agentId: string): Promise<void> {
     // Load facts for the system prompt
     const facts = await activeFacts(kbIds);
 
-    // Core memory
-    const coreRows = kbIds.length > 0
-      ? await db
-          .select({ key: coreMemory.key, value: coreMemory.value })
-          .from(coreMemory)
-          .where(inArray(coreMemory.kbId, kbIds))
-      : [];
+    // Core memory (always include workspace-wide core memory plus any KB-scoped memory)
+    const coreConditions = [isNull(coreMemory.kbId)];
+    if (kbIds.length > 0) {
+      coreConditions.push(inArray(coreMemory.kbId, kbIds));
+    }
+    const coreRows = await db
+      .select({ key: coreMemory.key, value: coreMemory.value })
+      .from(coreMemory)
+      .where(or(...coreConditions));
     const coreMemoryFacts = coreRows.map((r) => `${r.key}: ${r.value}`);
 
     // Build the system prompt once — it's the same for every stage
@@ -209,6 +211,7 @@ async function executeRun(runId: string, agentId: string): Promise<void> {
         role: agent.role,
         description: agent.description,
         guardrails: agent.guardrails,
+        agentMd: agent.agentMd,
       },
       references,
       [...facts, ...coreMemoryFacts],

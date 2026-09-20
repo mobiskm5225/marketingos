@@ -1,6 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { FileUp, Layers, Plus, RefreshCw, Bot, Database, FileText, Globe, Trash2 } from "lucide-react";
+import { FileUp, Layers, Plus, RefreshCw, Bot, Database, FileText, Globe, Trash2, Pin, PinOff, Save } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   api,
+  type CoreMemoryItem,
   type Integration,
   type IntegrationField,
   type KnowledgeDocument,
@@ -51,32 +52,40 @@ export const Route = createFileRoute("/knowledge")({
     ],
   }),
   loader: async () => {
-    const [knowledgeBases, integrations, memory, integrationFields] = await Promise.all([
+    const [knowledgeBases, integrations, memory, integrationFields, coreMemory] = await Promise.all([
       api.getKnowledgeBases(),
       api.getIntegrations(),
       api.getMemoryLayers(),
       api.getIntegrationFields(),
+      api.getCoreMemory().catch(() => []),
     ]);
-    return { knowledgeBases, integrations, memory, integrationFields };
+    return { knowledgeBases, integrations, memory, integrationFields, coreMemory };
   },
   component: KnowledgePage,
 });
 
 function KnowledgePage() {
-  const { knowledgeBases, integrations, memory, integrationFields } = Route.useLoaderData();
+  const { knowledgeBases, integrations, memory, integrationFields, coreMemory } = Route.useLoaderData();
   const [connecting, setConnecting] = useState<Integration | null>(null);
   const router = useRouter();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [target, setTarget] = useState(knowledgeBases[0]?.id ?? "");
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [coreEntries, setCoreEntries] = useState<CoreMemoryItem[]>(coreMemory);
+  const [coreSaving, setCoreSaving] = useState(false);
   const memoryLayers = memory.layers;
   const maxLayerCount = Math.max(1, ...memoryLayers.map((l) => l.count));
 
   const reload = async () => {
     await router.invalidate();
     if (target) setDocuments(await api.getDocuments(target).catch(() => []));
+    api.getCoreMemory().then(setCoreEntries).catch(() => {});
   };
+
+  useEffect(() => {
+    setCoreEntries(coreMemory);
+  }, [coreMemory]);
 
   useEffect(() => {
     if (!target) return;
@@ -134,7 +143,29 @@ function KnowledgePage() {
                       <p className="text-xs text-muted-foreground">{kb.source}</p>
                     </div>
                   </div>
-                  <Badge variant="outline">{kb.type}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{kb.type}</Badge>
+                    <button
+                      aria-label={`Delete ${kb.name}`}
+                      disabled={busy}
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded hover:bg-muted"
+                      onClick={async () => {
+                        if (!confirm(`Delete knowledge base "${kb.name}" and all its documents?`)) return;
+                        setBusy(true);
+                        try {
+                          await api.deleteKnowledgeBase(kb.id);
+                          toast.success(`${kb.name} deleted`);
+                          await reload();
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "Could not delete knowledge base");
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
                   <div>
@@ -298,6 +329,123 @@ function KnowledgePage() {
               {busy ? "Running…" : "Run distillation"}
             </Button>
           </div>
+
+          {/* Core Memory Editor (Layer 4) */}
+          <section className="panel mt-6 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Pin className="size-4 text-primary" /> Core Memory Essentials
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Brand voice, ICP, positioning, and non-negotiables that every agent receives in every prompt.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setCoreEntries((prev) => [
+                      ...prev,
+                      { key: "New fact or guideline", value: "", pinned: true },
+                    ]);
+                  }}
+                >
+                  <Plus className="size-3.5 mr-1" /> Add Entry
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={coreSaving}
+                  onClick={async () => {
+                    setCoreSaving(true);
+                    try {
+                      const valid = coreEntries.filter((e) => e.key.trim() && e.value.trim());
+                      await api.saveCoreMemory(valid);
+                      toast.success(`Saved ${valid.length} core memory entries`);
+                      await reload();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Could not save core memory");
+                    } finally {
+                      setCoreSaving(false);
+                    }
+                  }}
+                >
+                  <Save className="size-3.5 mr-1" /> {coreSaving ? "Saving…" : "Save Memory"}
+                </Button>
+              </div>
+            </div>
+
+            {coreEntries.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No core memory defined yet. Click <strong>Add Entry</strong> to define brand voice, target customer, or constraints that all agents must respect.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                {coreEntries.map((entry, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/40"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <Input
+                        className="font-medium text-sm h-8 max-w-sm"
+                        value={entry.key}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCoreEntries((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, key: val } : item)),
+                          );
+                        }}
+                        placeholder="e.g. Brand Voice & Tone"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors ${
+                            entry.pinned
+                              ? "border-primary/50 text-primary bg-primary/10"
+                              : "border-border text-muted-foreground hover:text-foreground"
+                          }`}
+                          onClick={() => {
+                            setCoreEntries((prev) =>
+                              prev.map((item, i) =>
+                                i === idx ? { ...item, pinned: !item.pinned } : item,
+                              ),
+                            );
+                          }}
+                        >
+                          {entry.pinned ? <Pin className="size-3" /> : <PinOff className="size-3" />}
+                          {entry.pinned ? "Pinned" : "Optional"}
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                          onClick={() => {
+                            setCoreEntries((prev) => prev.filter((_, i) => i !== idx));
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <Textarea
+                      rows={2}
+                      className="text-xs resize-y"
+                      value={entry.value}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCoreEntries((prev) =>
+                          prev.map((item, i) => (i === idx ? { ...item, value: val } : item)),
+                        );
+                      }}
+                      placeholder="e.g. Direct, authoritative, founder-to-founder. Never use hype words or corporate buzzwords."
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </TabsContent>
 
         <TabsContent value="files" className="mt-6">

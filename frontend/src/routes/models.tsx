@@ -254,7 +254,8 @@ function ProviderDialog({
   const test = async () => {
     setBusy(true);
     try {
-      const result = await api.testEndpoint(baseUrl, provider.id, apiKey || null);
+      const testUrl = baseUrl || (provider.id === "openai" ? "https://api.openai.com" : "");
+      const result = await api.testEndpoint(testUrl, provider.id, apiKey || null);
       if (!result.ok) {
         toast.error(result.message);
         return;
@@ -373,7 +374,7 @@ function ProviderDialog({
           <div className="flex gap-2">
             <Button
               variant="secondary"
-              disabled={busy || !baseUrl.trim()}
+              disabled={busy || (selfHosted && !baseUrl.trim()) || (!selfHosted && !apiKey && !provider.hasKey)}
               onClick={test}
             >
               {busy ? "Testing…" : "Test"}

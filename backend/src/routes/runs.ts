@@ -284,6 +284,70 @@ async function findRun(slug: string) {
   return row;
 }
 
+router.post('/runs/:slug/review', async (req, res, next) => {
+  try {
+    const run = await findRun(String(req.params.slug));
+    const { status, notes } = z
+      .object({
+        status: z.enum(['complete', 'rejected']),
+        notes: z.string().optional(),
+      })
+      .parse(req.body);
+
+    await db
+      .update(runs)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(runs.id, run.id));
+
+    const message = status === 'complete'
+      ? `Run approved by reviewer${notes ? `: ${notes}` : ''}`
+      : `Run rejected by reviewer${notes ? `: ${notes}` : ''}`;
+
+    await db.insert(runEvents).values({
+      runId: run.id,
+      type: status === 'complete' ? 'run_approved' : 'run_rejected',
+      message,
+    });
+
+    res.json({ id: run.slug, status });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/runs/:slug/abort', async (req, res, next) => {
+  try {
+    const run = await findRun(String(req.params.slug));
+    if (run.status !== 'running' && run.status !== 'pending') {
+      res.json({ id: run.slug, status: run.status });
+      return;
+    }
+
+    await db
+      .update(runs)
+      .set({
+        status: 'error',
+        error: 'Run cancelled by user',
+        finishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(runs.id, run.id));
+
+    await db.insert(runEvents).values({
+      runId: run.id,
+      type: 'run_error',
+      message: 'Run cancelled by user',
+    });
+
+    res.json({ id: run.slug, status: 'error' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/runs/:slug/comments', async (req, res, next) => {
   try {
     const run = await findRun(String(req.params.slug));

@@ -54,6 +54,7 @@ app.use(httpLogger);
 
 // Public routes
 app.use(healthRouter);       // GET /health
+app.use('/api', healthRouter); // GET /api/health
 
 // API routes
 app.use('/api', agentsRouter);

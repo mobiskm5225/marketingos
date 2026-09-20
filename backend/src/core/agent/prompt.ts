@@ -16,6 +16,7 @@ export interface AgentContext {
   role: string;
   description: string;
   guardrails: string | null;
+  agentMd?: string | null;
 }
 
 export interface Reference {
@@ -40,6 +41,12 @@ export function buildSystemPrompt(
   parts.push(`You are "${agent.name}", a specialised marketing agent.`);
   parts.push(`Role: ${agent.role}`);
   if (agent.description) parts.push(`Description: ${agent.description}`);
+
+  if (agent.agentMd) {
+    parts.push('');
+    parts.push('## Agent Persona & Directives');
+    parts.push(agent.agentMd);
+  }
 
   if (agent.guardrails) {
     parts.push('');

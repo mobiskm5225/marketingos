@@ -10,6 +10,7 @@ import {
   Paperclip,
   RefreshCw,
   Send,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -194,7 +195,24 @@ function RunDetail() {
     }
   };
 
+  const [expandedStageId, setExpandedStageId] = useState<string | null>(null);
+
   const isLive = run.status === "running" || run.status === "pending";
+
+  const getStageOutputText = (output: unknown): string => {
+    if (!output) return "";
+    if (typeof output === "string") return output;
+    if (typeof output === "object") {
+      const obj = output as Record<string, unknown>;
+      if (typeof obj.text === "string") return obj.text;
+      if (obj.gate && typeof obj.gate === "object") {
+        const g = obj.gate as Record<string, unknown>;
+        return `**Quality Gate Verdict:** ${g.pass ? "PASS" : "REVISE / FAIL"}\n\n**Reason:** ${g.reason || "No reason specified."}`;
+      }
+      return JSON.stringify(output, null, 2);
+    }
+    return String(output);
+  };
 
   return (
     <AppShell
@@ -207,17 +225,117 @@ function RunDetail() {
               <ArrowLeft className="size-4" /> All results
             </Link>
           </Button>
+          {isLive && (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await api.abortRun(run.id);
+                  toast.success("Run cancelled");
+                  const refreshed = await api.getRun(run.id);
+                  setRun(refreshed);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not cancel run");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <XCircle className="size-4" /> Abort
+            </Button>
+          )}
           <Button
             disabled={busy || isLive}
             onClick={rerun}
           >
             <RefreshCw className="size-4" /> Re-run
           </Button>
+          <Button
+            variant="outline"
+            disabled={busy || isLive}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1.5"
+            onClick={async () => {
+              if (!confirm("Are you sure you want to delete this run?")) return;
+              setBusy(true);
+              try {
+                await api.deleteRun(run.id);
+                toast.success("Run deleted");
+                navigate({ to: "/runs" });
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not delete run");
+                setBusy(false);
+              }
+            }}
+          >
+            <Trash2 className="size-4" /> Delete
+          </Button>
         </div>
       }
     >
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
+          {/* Review Banner for needs review status */}
+          {run.status === "needs review" && (
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
+                  <CheckCircle2 className="size-5" />
+                </span>
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">Quality Gate Review Required</h4>
+                  <p className="text-xs text-muted-foreground">
+                    This run paused at a quality gate for human approval before finalization.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await api.reviewRun(run.id, "rejected", "Rejected by reviewer");
+                      toast.info("Run marked as rejected");
+                      const refreshed = await api.getRun(run.id);
+                      setRun(refreshed);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Could not reject");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Reject / Revise
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium"
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await api.reviewRun(run.id, "complete", "Approved by reviewer");
+                      toast.success("Run approved & completed!");
+                      const refreshed = await api.getRun(run.id);
+                      setRun(refreshed);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Could not approve");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <CheckCircle2 className="size-4" /> Approve & Complete
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Status + metrics */}
           <section className="panel hero-gradient p-5">
             <div className="flex items-center gap-3">
@@ -244,32 +362,72 @@ function RunDetail() {
             )}
           </section>
 
-          {/* Live stage progress */}
+          {/* Live stage progress with expandable outputs */}
           {stages.length > 0 && (
             <section className="panel p-5">
-              <h2 className="font-semibold">Pipeline stages</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">Pipeline stages ({stages.length})</h2>
+                <span className="text-xs text-muted-foreground">Click a stage to inspect output</span>
+              </div>
               <ul className="mt-4 space-y-3">
-                {stages.map((s) => (
-                  <li key={s.id} className="flex items-start gap-3">
-                    <div className="mt-0.5">{stageIcon(s.status)}</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium">{s.name}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {s.status === "complete" && s.model ? `${s.model}` : ""}
-                        </span>
-                      </div>
-                      {s.status === "complete" && (
-                        <p className="text-xs text-muted-foreground">
-                          {s.inputTokens + s.outputTokens} tokens · ${Number(s.costUsd).toFixed(4)}
-                        </p>
+                {stages.map((s) => {
+                  const isExpanded = expandedStageId === s.id;
+                  const outputText = getStageOutputText(s.output);
+                  return (
+                    <li
+                      key={s.id}
+                      className="rounded-lg border border-border bg-card transition-colors hover:border-primary/40 overflow-hidden"
+                    >
+                      <button
+                        onClick={() => setExpandedStageId(isExpanded ? null : s.id)}
+                        className="flex w-full items-start gap-3 p-3.5 text-left"
+                      >
+                        <div className="mt-0.5">{stageIcon(s.status)}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium">{s.name}</p>
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {s.status === "complete" && s.model ? `${s.model}` : ""}
+                            </span>
+                          </div>
+                          {s.status === "complete" && (
+                            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                              <span>
+                                {s.inputTokens + s.outputTokens} tokens · ${Number(s.costUsd).toFixed(4)}
+                              </span>
+                              <span className="text-primary text-[11px] font-medium">
+                                {isExpanded ? "Hide Output ▲" : "View Output ▼"}
+                              </span>
+                            </div>
+                          )}
+                          {s.error && (
+                            <p className="mt-1 text-xs text-destructive">{s.error}</p>
+                          )}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-border bg-muted/20 p-4 space-y-3 animate-in fade-in-50 duration-150">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Stage Output</span>
+                            <span>
+                              {s.inputTokens} prompt · {s.outputTokens} completion
+                            </span>
+                          </div>
+                          {outputText ? (
+                            <div className="rounded-md border border-border bg-card p-4 max-h-[400px] overflow-y-auto">
+                              <Markdown source={outputText} />
+                            </div>
+                          ) : (
+                            <p className="text-xs italic text-muted-foreground">
+                              No output recorded for this stage.
+                            </p>
+                          )}
+                        </div>
                       )}
-                      {s.error && (
-                        <p className="mt-1 text-xs text-destructive">{s.error}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           )}

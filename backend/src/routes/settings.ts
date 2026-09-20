@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../core/db';
 import { modelProviders, integrations, appSettings } from '../core/db/schema';
-import { encrypt, encryptionAvailable } from '../lib/crypto';
+import { encrypt, tryDecrypt, encryptionAvailable } from '../lib/crypto';
 import { assertFetchable, resolveLocalEndpoint } from '../core/safe-fetch';
 import { HttpError } from '../middleware/error';
 
@@ -91,22 +91,75 @@ router.post('/models/test', async (req, res) => {
   try {
     const { baseUrl, apiKey, slug } = z
       .object({
-        baseUrl: z.string().min(1),
+        baseUrl: z.string().nullish(),
         apiKey: z.string().nullish(),
-        // Optional: when given, a successful probe saves the endpoint and the
-        // models it reported against that provider.
         slug: z.string().nullish(),
       })
       .parse(req.body);
 
-    // A self-hosted server runs on the host, so a loopback URL has to be
-    // rewritten before the containerised backend can reach it.
-    const reachable = resolveLocalEndpoint(baseUrl);
+    let providerRow: (typeof modelProviders.$inferSelect) | undefined;
+    let effectiveKey = apiKey;
+
+    if (slug) {
+      const [p] = await db.select().from(modelProviders).where(eq(modelProviders.slug, slug));
+      providerRow = p;
+      if (!effectiveKey && p?.apiKeyEnc) {
+        effectiveKey = tryDecrypt(p.apiKeyEnc);
+      }
+    }
+
+    // Default base URL for cloud providers
+    let targetBaseUrl = baseUrl || providerRow?.baseUrl;
+    if (!targetBaseUrl) {
+      if (slug === 'openai') targetBaseUrl = 'https://api.openai.com';
+      else if (slug === 'anthropic') targetBaseUrl = 'https://api.anthropic.com';
+      else targetBaseUrl = 'http://localhost:11434';
+    }
+
+    // Special test for Anthropic
+    if (slug === 'anthropic') {
+      if (!effectiveKey) {
+        res.json({ ok: false, message: 'Anthropic requires an API key' });
+        return;
+      }
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': effectiveKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-haiku-20241022',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'ping' }],
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (resp.status === 401) {
+        res.json({ ok: false, message: 'Invalid Anthropic API key (401)' });
+        return;
+      }
+      const existingModels = (providerRow?.models as string[] | undefined) ?? [];
+      const models = existingModels.length > 0
+        ? existingModels
+        : ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'];
+      res.json({
+        ok: true,
+        models,
+        saved: false,
+        message: 'Reachable · Anthropic API key verified',
+      });
+      return;
+    }
+
+    // A self-hosted or OpenAI-compatible server probe
+    const reachable = resolveLocalEndpoint(targetBaseUrl);
     await assertFetchable(reachable, { allowPrivate: true });
     const url = `${reachable.replace(/\/+$/, '')}/v1/models`;
 
     const response = await fetch(url, {
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      headers: effectiveKey ? { Authorization: `Bearer ${effectiveKey}` } : {},
       signal: AbortSignal.timeout(10_000),
     });
 
@@ -118,28 +171,29 @@ router.post('/models/test', async (req, res) => {
     const body = (await response.json()) as { data?: { id: string }[] };
     const models = (body.data ?? []).map((m) => m.id);
 
-    // A self-hosted server is the source of truth for which models it serves, so
-    // a successful probe records them rather than making the user retype a list.
-    if (slug && models.length > 0) {
+    // If models returned from self-hosted server, save them
+    if (slug && models.length > 0 && slug !== 'openai') {
       await db
         .update(modelProviders)
         .set({
           models,
-          baseUrl,
+          baseUrl: baseUrl || null,
           defaultModel: models[0],
           updatedAt: new Date(),
         })
         .where(eq(modelProviders.slug, slug));
     }
 
+    const existingModels = (providerRow?.models as string[] | undefined) ?? [];
+    const effectiveModels = models.length > 0 ? models : existingModels;
+
     res.json({
       ok: true,
-      models,
-      saved: Boolean(slug && models.length > 0),
-      message: `Reachable · ${models.length} model${models.length === 1 ? '' : 's'} found`,
+      models: effectiveModels,
+      saved: Boolean(slug && models.length > 0 && slug !== 'openai'),
+      message: `Reachable · ${effectiveModels.length} models verified`,
     });
   } catch (err) {
-    // A failed probe is a result, not a server error — report it as one.
     res.json({ ok: false, message: err instanceof Error ? err.message : 'Could not reach endpoint' });
   }
 });

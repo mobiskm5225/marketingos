@@ -300,6 +300,13 @@ export interface MemoryLayers {
   embeddingsAvailable: boolean;
 }
 
+export interface CoreMemoryItem {
+  id?: string;
+  key: string;
+  value: string;
+  pinned: boolean;
+}
+
 export interface KnowledgeDocument {
   id: string;
   name: string;
@@ -484,6 +491,12 @@ export const api = {
     return res.json();
   },
 
+  reviewRun: (slug: string, status: "complete" | "rejected", notes?: string) =>
+    send<{ id: string; status: string }>("POST", `/runs/${slug}/review`, { status, notes }),
+
+  abortRun: (slug: string) =>
+    send<{ id: string; status: string }>("POST", `/runs/${slug}/abort`),
+
   deleteRun: (slug: string) => send<void>("DELETE", `/runs/${slug}`),
 
   // ─── Models ─────────────────────────────────────────────────────────────────
@@ -539,6 +552,15 @@ export const api = {
 
   distill: (kb?: string | null) =>
     send<DistillResult>("POST", "/memory/distill", { kb: kb ?? null }),
+
+  getCoreMemory: async (): Promise<CoreMemoryItem[]> => {
+    const res = await fetch(`${API_BASE}/memory/core`);
+    if (!res.ok) throw new Error("Failed to fetch core memory");
+    return res.json();
+  },
+
+  saveCoreMemory: (entries: { key: string; value: string; pinned?: boolean }[]) =>
+    send<{ entries: number }>("PUT", "/memory/core", { entries }),
 
   // ─── Skills ─────────────────────────────────────────────────────────────────
 
