@@ -8,7 +8,8 @@
     "start": "node --require tsx/cjs src/index.ts",
     "build": "tsc",
     "db:migrate": "node --require tsx/cjs scripts/migrate.ts",
-    "seed": "node --require tsx/cjs scripts/seed.ts"
+    "seed": "node --require tsx/cjs scripts/seed.ts",
+    "seed:agents": "node --require tsx/cjs scripts/seed-prebuilt-agents.ts"
   },
   "keywords": [],
   "author": "",

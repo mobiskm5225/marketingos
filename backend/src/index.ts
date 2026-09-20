@@ -21,13 +21,28 @@ const PORT = process.env.PORT ?? 8000;
 app.use(helmet({ contentSecurityPolicy: false }));
 
 // The browser calls the API cross-origin during client-side navigation.
-// CORS_ORIGINS is a comma-separated allowlist; defaults cover Vite and the Docker frontend.
-const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://localhost:5173')
+// CORS_ORIGINS is a comma-separated allowlist; defaults cover Vite and Docker frontend ports.
+const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:8080')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
-app.use(cors({ origin: corsOrigins }));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow server-to-server, mobile, curl, or same-origin requests with no origin header
+    if (!origin) return callback(null, true);
+    // Allow explicitly configured origins or wildcard
+    if (corsOrigins.includes(origin) || corsOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    // Allow any localhost / 127.0.0.1 port for local development
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  credentials: true,
+}));
 
 // Parse JSON and capture raw body in one pass.
 // 4mb limit: logo upload sends base64 image in the JSON body.

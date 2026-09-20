@@ -12,7 +12,7 @@ RUN npm ci
 COPY . .
 
 # Baked in at build time: Vite inlines VITE_* into the client bundle.
-ARG VITE_API_URL=http://localhost:8000/api
+ARG VITE_API_URL=http://localhost:8001/api
 ENV VITE_API_URL=$VITE_API_URL
 
 # Without this Nitro auto-detects a Cloudflare Worker preset and emits

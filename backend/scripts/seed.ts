@@ -6,6 +6,7 @@ import {
   integrations as catalogIntegrations,
   categories as catalogCategories,
 } from './seed-data';
+import { seedPrebuiltAgents } from './seed-prebuilt-agents';
 
 /**
  * Loads reference data only — model providers and integrations. It never creates
@@ -59,7 +60,8 @@ async function main() {
   console.log(
     `✅ Catalog ready — ${catalogCategories.length} categories, ${catalogProviders.length} model providers, ${catalogIntegrations.length} integrations.`,
   );
-  console.log('No agents, knowledge bases or runs created. Add those through the app.');
+  
+  await seedPrebuiltAgents();
 }
 
 main()

@@ -343,8 +343,8 @@ export interface ImportResult {
 // INTERNAL_API_URL is a runtime env var; VITE_API_URL is inlined at build time.
 const API_BASE =
   typeof window === "undefined"
-    ? process.env.INTERNAL_API_URL ?? "http://localhost:8000/api"
-    : import.meta.env.VITE_API_URL ?? "http://localhost:8000/api";
+    ? process.env.INTERNAL_API_URL ?? "http://localhost:8001/api"
+    : import.meta.env.VITE_API_URL ?? "http://localhost:8001/api";
 
 export const api = {
   getAgents: async (): Promise<Agent[]> => {

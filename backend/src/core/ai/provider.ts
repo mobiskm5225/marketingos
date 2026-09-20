@@ -60,14 +60,11 @@ function priceFor(model: string, inputTokens: number, outputTokens: number): num
 }
 
 async function loadProvider(slug?: string | null): Promise<ResolvedProvider | null> {
-  const rows = slug
-    ? await db.select().from(modelProviders).where(eq(modelProviders.slug, slug))
-    : await db.select().from(modelProviders).orderBy(asc(modelProviders.createdAt));
-
-  for (const row of rows) {
+  if (slug) {
+    const [row] = await db.select().from(modelProviders).where(eq(modelProviders.slug, slug));
+    if (!row) return null;
     const apiKey = tryDecrypt(row.apiKeyEnc);
-    // Self-hosted providers need no key, only a reachable endpoint.
-    if (!apiKey && !row.baseUrl) continue;
+    if (!apiKey && !row.baseUrl) return null;
     return {
       slug: row.slug,
       kind: row.kind,
@@ -77,7 +74,27 @@ async function loadProvider(slug?: string | null): Promise<ResolvedProvider | nu
     };
   }
 
-  return null;
+  // If no slug is specified, find all usable providers (with apiKey or baseUrl)
+  const rows = await db.select().from(modelProviders);
+  const usable = rows
+    .map((row) => ({
+      row,
+      apiKey: tryDecrypt(row.apiKeyEnc),
+    }))
+    .filter(({ row, apiKey }) => Boolean(apiKey || row.baseUrl));
+
+  if (usable.length === 0) return null;
+
+  // Prefer OpenAI if configured, otherwise take first usable
+  const chosen = usable.find((u) => u.row.slug === 'openai') ?? usable[0]!;
+
+  return {
+    slug: chosen.row.slug,
+    kind: chosen.row.kind,
+    apiKey: chosen.apiKey,
+    baseUrl: chosen.row.baseUrl,
+    defaultModel: chosen.row.defaultModel ?? (chosen.row.models as string[])[0] ?? null,
+  };
 }
 
 async function isConfigured(slug?: string | null): Promise<boolean> {

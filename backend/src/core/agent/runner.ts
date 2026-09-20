@@ -155,6 +155,14 @@ async function executeRun(runId: string, agentId: string): Promise<void> {
     const [agent] = await db.select().from(agents).where(eq(agents.id, agentId));
     if (!agent) throw new Error('Agent disappeared during execution');
 
+    const [agentProvider] = agent.defaultProviderId
+      ? await db
+          .select({ slug: modelProviders.slug })
+          .from(modelProviders)
+          .where(eq(modelProviders.id, agent.defaultProviderId))
+      : [];
+    const agentProviderSlug = agentProvider?.slug ?? undefined;
+
     const [run] = await db.select().from(runs).where(eq(runs.id, runId));
     if (!run) throw new Error('Run disappeared during execution');
 
@@ -281,7 +289,7 @@ async function executeRun(runId: string, agentId: string): Promise<void> {
               : [];
 
             // Resolve model: stage override → agent default
-            const stageProvider = row.providerSlug ?? undefined;
+            const stageProvider = row.providerSlug ?? agentProviderSlug ?? undefined;
             const stageModel = row.stage.model ?? agent.defaultModel ?? undefined;
 
             let completion: CompletionResult;
